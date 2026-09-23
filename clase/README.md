@@ -26,4 +26,5 @@ Todo está en `schedule-data.js`:
 | `schedule-data.js` | Datos del horario y utilidades compartidas |
 | `popup.html` / `popup.css` / `popup.js` | Popup: menú y horario diario |
 | `full_schedule.html` / `full_schedule.css` / `full_schedule.js` | Horario semanal completo |
+| `bg-waves.svg` | Fondo de ondas claras del popup |
 | `icons/` | Iconos (`icon.svg` es la fuente) |

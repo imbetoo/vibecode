@@ -1,5 +1,5 @@
 :root {
-  --font: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --text: #ffffff;
   --text-soft: rgba(235, 238, 255, 0.72);
   --pill-bg: #1d2130;
@@ -76,7 +76,6 @@ body {
   height: 44px;
   font-size: 17px;
   font-weight: 800;
-  font-style: italic;
   letter-spacing: 0.04em;
   border-radius: 999px;
   background: var(--header-bg);

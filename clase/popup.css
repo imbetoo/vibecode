@@ -1,12 +1,17 @@
 :root {
   --font: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --text: #ffffff;
-  --text-soft: rgba(235, 238, 255, 0.72);
+  --text: #1d1d1f;
+  --text-soft: rgba(29, 29, 31, 0.58);
+  --icon: #333333;
+  --on-dark: #ffffff;
   --pill-bg: #1d2130;
   --header-bg: #3d3d40;
-  --glass: rgba(255, 255, 255, 0.1);
-  --glass-strong: rgba(255, 255, 255, 0.16);
-  --glass-border: rgba(255, 255, 255, 0.14);
+  --glass: rgba(255, 255, 255, 0.55);
+  --glass-strong: rgba(255, 255, 255, 0.78);
+  --glass-border: rgba(0, 0, 0, 0.06);
+  --control: rgba(0, 0, 0, 0.05);
+  --control-hover: rgba(0, 0, 0, 0.09);
+  --radius-app: 24px;
   --ease: cubic-bezier(0.25, 0.8, 0.25, 1);
   --row-h: 46px;
   --break-h: 18px;
@@ -22,18 +27,19 @@ html, body {
   overflow: hidden;
 }
 
+/* Lo que asoma por las esquinas redondeadas es el fondo de la ventana del popup. */
+html { background: transparent; }
+
 body {
   font-family: var(--font);
   color: var(--text);
   -webkit-font-smoothing: antialiased;
-  background-color: #2a2f52;
-  background-image:
-    radial-gradient(at 8% 4%,   #6f86c9 0px, transparent 55%),
-    radial-gradient(at 92% 18%, #5b6fb0 0px, transparent 50%),
-    radial-gradient(at 88% 62%, #4a3f7a 0px, transparent 55%),
-    radial-gradient(at 4% 82%,  #3f6f86 0px, transparent 50%),
-    radial-gradient(at 60% 100%, #3b3468 0px, transparent 55%);
+  border-radius: var(--radius-app);
+  /* Ondas blancas y grises suaves (degradados dentro del SVG) */
+  background: #eef0f3 url("bg-waves.svg") center / 100% 100% no-repeat;
 }
+
+.app { border-radius: var(--radius-app); }
 
 button {
   font: inherit;
@@ -45,7 +51,7 @@ button {
 }
 
 button:focus-visible {
-  outline: 2px solid rgba(255, 255, 255, 0.85);
+  outline: 2px solid rgba(29, 29, 31, 0.7);
   outline-offset: 2px;
 }
 
@@ -119,12 +125,12 @@ button:focus-visible {
   border-radius: 22px;
   background: var(--glass-strong);
   border: 1px solid var(--glass-border);
-  box-shadow: 0 10px 30px rgba(10, 12, 40, 0.25);
+  box-shadow: 0 10px 30px rgba(20, 24, 40, 0.1);
   backdrop-filter: blur(18px);
   transition: transform 0.2s var(--ease), background 0.2s var(--ease);
 }
 
-.menu-button:not(:disabled):hover  { background: rgba(255, 255, 255, 0.22); }
+.menu-button:not(:disabled):hover  { background: rgba(255, 255, 255, 0.95); }
 .menu-button:not(:disabled):active { transform: scale(0.97); }
 
 .menu-button__icon {
@@ -156,7 +162,7 @@ button:focus-visible {
   color: var(--text-soft);
 }
 
-.menu-button__chevron { color: var(--text-soft); }
+.menu-button__chevron { color: var(--icon); opacity: 0.6; }
 
 .menu-button--soon {
   cursor: default;
@@ -166,8 +172,8 @@ button:focus-visible {
 }
 
 .menu-button--soon .menu-button__icon {
-  color: var(--text);
-  background: rgba(255, 255, 255, 0.14);
+  color: var(--icon);
+  background: var(--control);
 }
 
 /* ---------- Vista 2: horario diario ---------- */
@@ -193,8 +199,9 @@ button:focus-visible {
   padding: 0 12px 0 8px;
   font-size: 13px;
   font-weight: 600;
+  color: var(--icon);
   border-radius: 15px;
-  background: var(--glass);
+  background: var(--control);
   transition: background 0.2s var(--ease), transform 0.2s var(--ease);
 }
 
@@ -204,7 +211,7 @@ button:focus-visible {
   justify-content: center;
 }
 
-.toolbar-button:hover  { background: var(--glass-strong); }
+.toolbar-button:hover  { background: var(--control-hover); }
 .toolbar-button:active { transform: scale(0.93); }
 
 .day-header {
@@ -220,14 +227,14 @@ button:focus-visible {
   gap: 2px;
   height: 40px;
   padding: 0 6px;
-  color: #3d3d40;
+  color: var(--icon);
   border-radius: 12px;
   transition: background 0.2s var(--ease), transform 0.2s var(--ease);
 }
 
 .day-nav--prev { justify-self: start; }
 .day-nav--next { justify-self: end; }
-.day-nav:hover  { background: rgba(255, 255, 255, 0.12); }
+.day-nav:hover  { background: var(--control); }
 .day-nav:active { transform: scale(0.9); }
 
 .day-nav__label {
@@ -252,9 +259,10 @@ button:focus-visible {
   font-style: italic;
   letter-spacing: 0.05em;
   white-space: nowrap;
+  color: var(--on-dark);
   border-radius: 999px;
   background: var(--header-bg);
-  box-shadow: 0 6px 18px rgba(10, 12, 40, 0.25);
+  box-shadow: 0 6px 18px rgba(20, 24, 40, 0.18);
 }
 
 .day-pill.is-long {
@@ -302,9 +310,10 @@ button:focus-visible {
   font-weight: 700;
   line-height: 1.05;
   font-variant-numeric: tabular-nums;
+  color: var(--on-dark);
   border-radius: 12px;
   background: var(--pill-bg);
-  box-shadow: 0 4px 12px rgba(10, 12, 40, 0.22);
+  box-shadow: 0 4px 12px rgba(20, 24, 40, 0.16);
 }
 
 .time-pill::after {
@@ -320,10 +329,11 @@ button:focus-visible {
 .time-pill__end { order: 2; }
 
 .time-pill.is-now {
-  box-shadow: 0 0 0 2px #fff, 0 4px 14px rgba(10, 12, 40, 0.3);
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px #0a84ff, 0 4px 14px rgba(20, 24, 40, 0.2);
 }
 
 .subject-block {
+  position: relative;
   grid-column: 2;
   display: flex;
   flex-direction: column;
@@ -332,9 +342,34 @@ button:focus-visible {
   min-width: 0;
   padding: 8px 16px;
   border-radius: 16px;
-  box-shadow: 0 8px 20px rgba(10, 12, 40, 0.18);
+  /* El color base lo pone el JS en background-color; esto le da volumen. */
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.15) 0%, rgba(0, 0, 0, 0.05) 100%);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    0 8px 20px rgba(20, 24, 40, 0.14);
   overflow: hidden;
+  cursor: default;
+  transition: transform 0.25s var(--ease), box-shadow 0.25s var(--ease);
 }
+
+.subject-block::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: rgba(255, 255, 255, 0.1);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s var(--ease);
+}
+
+.subject-block:hover {
+  transform: translateY(-2px) scale(1.01);
+  box-shadow: 0 14px 30px rgba(10, 12, 40, 0.3);
+}
+
+.subject-block:hover::after { opacity: 1; }
 
 .subject-block__name {
   font-size: 15px;
@@ -377,7 +412,7 @@ button:focus-visible {
   text-align: center;
   border-radius: 22px;
   background: var(--glass);
-  border: 1px dashed var(--glass-border);
+  border: 1px dashed rgba(0, 0, 0, 0.14);
 }
 
 .empty-day__title { font-size: 17px; font-weight: 700; }

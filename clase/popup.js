@@ -67,7 +67,7 @@
     const el = document.createElement('div');
     el.className = 'subject-block' + (block.from === block.to ? ' is-single' : '');
     el.style.gridRow = `${slotRow(block.from)} / ${slotRow(block.to) + 1}`;
-    el.style.background = subject.color;
+    el.style.backgroundColor = subject.color;
     el.style.color = textColorFor(subject.color);
 
     const name = document.createElement('span');
