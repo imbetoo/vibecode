@@ -20,6 +20,12 @@ function nextIpeOpening(now = new Date()) {
   return nextWeekly(IPE_OPENING, now);
 }
 
+/** Última apertura ya ocurrida (viernes 00:00 anterior o igual a `now`). */
+function lastIpeOpening(now = new Date()) {
+  const next = nextIpeOpening(now);
+  return new Date(next.getFullYear(), next.getMonth(), next.getDate() - 7, IPE_OPENING.hour, IPE_OPENING.minute);
+}
+
 /**
  * Estado de la tarea: entre la entrega del jueves y la apertura del viernes
  * se está esperando; el resto del tiempo, cuenta atrás hasta el jueves 20:00.
@@ -35,7 +41,7 @@ function ipeStatus(now = new Date()) {
 /** "Faltan 2d 14h 30m" o el aviso de espera. */
 function ipeCountdownText(now = new Date()) {
   const status = ipeStatus(now);
-  if (status.waiting) return 'Esperando a que abra la nueva tarea...';
+  if (status.waiting) return 'Esperando nueva tarea...';
   const totalMin = Math.floor(status.ms / 60000);
   const d = Math.floor(totalMin / (24 * 60));
   const h = Math.floor((totalMin % (24 * 60)) / 60);

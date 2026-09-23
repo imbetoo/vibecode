@@ -2,37 +2,54 @@
  * Service worker: avisa con una notificación cuando se abre la nueva tarea
  * de IPE (viernes a las 00:00).
  *
- * Se programa una alarma de un solo disparo para la próxima apertura y, al
- * saltar, se reprograma la siguiente. Así cada aviso se calcula con la hora
- * local real (los cambios de hora no la desplazan como haría una alarma
- * periódica de 7 días).
+ * Una alarma comprueba la hora cada minuto (alineada al cambio de minuto).
+ * Si la tarea de esta semana ya está abierta y aún no se ha avisado, se
+ * notifica y se guarda en chrome.storage.local qué apertura se avisó, para
+ * no repetir el aviso esa semana. Si Chrome estaba cerrado a las 00:00, el
+ * aviso sale en la primera comprobación tras abrirlo (antes de la entrega).
  */
 importScripts('ipe.js');
 
-const ALARM = 'ipe-opening';
+const ALARM = 'ipe-check';
+const FLAG = 'ipeNotifiedOpening';
 
-function scheduleNextOpening() {
-  chrome.alarms.create(ALARM, { when: nextIpeOpening().getTime() });
+function startChecking() {
+  const nextMinute = Math.ceil(Date.now() / 60000) * 60000;
+  chrome.alarms.create(ALARM, { when: nextMinute, periodInMinutes: 1 });
 }
 
-// Solo se crea si no existe: si Chrome estaba cerrado a la hora del aviso,
-// la alarma pendiente salta al volver a abrirlo en vez de perderse.
-async function ensureAlarm() {
-  const existing = await chrome.alarms.get(ALARM);
-  if (!existing) scheduleNextOpening();
-}
+async function checkIpeOpening() {
+  const now = new Date();
+  // Entre la entrega del jueves y la apertura del viernes no hay tarea abierta.
+  if (ipeStatus(now).waiting) return;
 
-chrome.runtime.onInstalled.addListener(scheduleNextOpening);
-chrome.runtime.onStartup.addListener(ensureAlarm);
+  const opening = lastIpeOpening(now).toISOString();
+  const { [FLAG]: notified } = await chrome.storage.local.get(FLAG);
+  if (notified === opening) return;
 
-chrome.alarms.onAlarm.addListener(alarm => {
-  if (alarm.name !== ALARM) return;
-  chrome.notifications.create(`ipe-${Date.now()}`, {
+  await chrome.storage.local.set({ [FLAG]: opening });
+  chrome.notifications.create(`ipe-${opening}`, {
     type: 'basic',
     iconUrl: 'icons/icon_128.png',
     title: 'Entrega IPE',
     message: '¡La tarea de IPE ya está abierta!',
     priority: 2
   });
-  scheduleNextOpening();
+}
+
+chrome.runtime.onInstalled.addListener(async ({ reason }) => {
+  chrome.alarms.clear('ipe-opening'); // alarma de la versión 1.1.0
+  // Al instalar a mitad de semana no se avisa de una tarea que ya estaba abierta.
+  const { [FLAG]: notified } = await chrome.storage.local.get(FLAG);
+  if (!notified) await chrome.storage.local.set({ [FLAG]: lastIpeOpening().toISOString() });
+  startChecking();
+});
+
+chrome.runtime.onStartup.addListener(() => {
+  startChecking();
+  checkIpeOpening();
+});
+
+chrome.alarms.onAlarm.addListener(alarm => {
+  if (alarm.name === ALARM) checkIpeOpening();
 });

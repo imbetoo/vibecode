@@ -2,6 +2,7 @@
   const app = document.getElementById('app');
   const menuView = document.getElementById('menu-view');
   const scheduleView = document.getElementById('schedule-view');
+  const tasksView = document.getElementById('tasks-view');
   const grid = document.getElementById('day-grid');
   const dayTitle = document.getElementById('day-title');
   const prevLabel = document.getElementById('prev-label');
@@ -33,24 +34,49 @@
 
   const ipeText = document.getElementById('ipe-countdown-text');
 
-  function renderIpeCountdown() {
-    const text = ipeCountdownText();
-    if (ipeText.textContent !== text) ipeText.textContent = text;
+  function updateIPECountdown() {
+    ipeText.textContent = ipeCountdownText();
+  }
+
+  // Cada minuto, arrancando en el cambio de minuto para no ir desfasado.
+  function startIPECountdown() {
+    updateIPECountdown();
+    const msToNextMinute = 60000 - (Date.now() % 60000);
+    setTimeout(() => {
+      updateIPECountdown();
+      setInterval(updateIPECountdown, 60000);
+    }, msToNextMinute);
   }
 
   // ---------- Navegación entre vistas ----------
 
+  const VIEWS = { menu: menuView, schedule: scheduleView, tasks: tasksView };
+
+  /** Muestra una vista; las demás quedan inertes (sin foco ni clics). */
+  function showView(name) {
+    app.classList.toggle('is-schedule', name === 'schedule');
+    app.classList.toggle('is-tasks', name === 'tasks');
+    for (const [key, view] of Object.entries(VIEWS)) view.inert = key !== name;
+  }
+
+  function currentView() {
+    if (app.classList.contains('is-schedule')) return 'schedule';
+    if (app.classList.contains('is-tasks')) return 'tasks';
+    return 'menu';
+  }
+
   function showSchedule() {
-    app.classList.add('is-schedule');
-    menuView.inert = true;
-    scheduleView.inert = false;
+    showView('schedule');
     renderDay();
   }
 
   function showMenu() {
-    app.classList.remove('is-schedule');
-    scheduleView.inert = true;
-    menuView.inert = false;
+    showView('menu');
+  }
+
+  function showTasks() {
+    showView('tasks');
+    loadTasks();
   }
 
   // ---------- Horario diario ----------
@@ -214,6 +240,160 @@
     renderDay(step);
   }
 
+  // ---------- Tareas del Aula Virtual (calendario .ics de Moodle) ----------
+
+  const ICS_KEY = 'icsUrl';
+  const tasksSetup = document.getElementById('tasks-setup');
+  const tasksList = document.getElementById('tasks-list');
+  const tasksStatus = document.getElementById('tasks-status');
+  const tasksSettings = document.getElementById('tasks-settings');
+  const icsInput = document.getElementById('ics-url');
+  const icsCancel = document.getElementById('ics-cancel');
+  const icsClear = document.getElementById('ics-clear');
+
+  async function getIcsUrl() {
+    const { [ICS_KEY]: url } = await chrome.storage.local.get(ICS_KEY);
+    return url || '';
+  }
+
+  /** Acepta http(s) y webcal (Moodle a veces da webcal://, que es https). */
+  function normalizeIcsUrl(value) {
+    const url = new URL(value.trim().replace(/^webcal:\/\//i, 'https://'));
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') throw new Error('protocol');
+    return url.href;
+  }
+
+  function setTasksStatus(text, isError = false) {
+    tasksStatus.textContent = text;
+    tasksStatus.classList.toggle('is-error', isError);
+  }
+
+  /** Formulario para pegar el enlace; si ya hay uno, permite cancelar o borrarlo. */
+  function showSetup(currentUrl = '') {
+    tasksSetup.hidden = false;
+    tasksList.hidden = true;
+    tasksSettings.hidden = true;
+    icsInput.value = currentUrl;
+    icsCancel.hidden = !currentUrl;
+    icsClear.hidden = !currentUrl;
+    setTasksStatus(currentUrl ? 'Cambia o borra el enlace' : 'Sin calendario configurado');
+  }
+
+  function showList() {
+    tasksSetup.hidden = true;
+    tasksList.hidden = false;
+    tasksSettings.hidden = false;
+  }
+
+  let loadSeq = 0;
+
+  async function loadTasks() {
+    const seq = ++loadSeq;
+    const url = await getIcsUrl();
+    if (seq !== loadSeq) return;
+    if (!url) {
+      showSetup();
+      return;
+    }
+    showList();
+    setTasksStatus('Cargando…');
+    tasksList.replaceChildren();
+
+    let text;
+    try {
+      const response = await fetch(url, { cache: 'no-store' });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      text = await response.text();
+    } catch (error) {
+      if (seq === loadSeq) setTasksStatus(`No se pudo cargar (${error.message})`, true);
+      return;
+    }
+    if (seq !== loadSeq) return; // hubo otra carga (o un cambio de enlace) mientras tanto
+    if (!text.includes('BEGIN:VCALENDAR')) {
+      setTasksStatus('El enlace no devuelve un calendario .ics', true);
+      return;
+    }
+
+    const events = upcomingEvents(parseICS(text));
+    renderTasks(events);
+    const time = new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+    setTasksStatus(`${events.length} ${events.length === 1 ? 'pendiente' : 'pendientes'} · ${time}`);
+  }
+
+  function renderTasks(events) {
+    if (!events.length) {
+      const empty = document.createElement('li');
+      empty.className = 'tasks-empty';
+      empty.textContent = 'No hay tareas próximas. ¡Todo al día!';
+      tasksList.replaceChildren(empty);
+      return;
+    }
+
+    const now = new Date();
+    const items = events.map(event => {
+      const li = document.createElement('li');
+      li.className = 'task';
+
+      const date = document.createElement('span');
+      date.className = 'task__date';
+      const day = document.createElement('span');
+      day.className = 'task__day';
+      day.textContent = String(event.start.getDate());
+      const month = document.createElement('span');
+      month.className = 'task__month';
+      month.textContent = event.start.toLocaleDateString('es-ES', { month: 'short' }).replace('.', '');
+      date.append(day, month);
+
+      const body = document.createElement('span');
+      body.className = 'task__body';
+      const title = document.createElement('span');
+      title.className = 'task__title';
+      title.textContent = event.summary;
+      const meta = document.createElement('span');
+      meta.className = 'task__meta';
+      const weekday = event.start.toLocaleDateString('es-ES', { weekday: 'long' });
+      const time = event.allDay
+        ? 'Todo el día'
+        : event.start.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+      meta.textContent = [weekday, time, event.category].filter(Boolean).join(' · ');
+      body.append(title, meta);
+
+      const when = document.createElement('span');
+      when.className = 'task__when';
+      const minutes = Math.ceil((event.start - now) / 60000);
+      when.textContent = minutes <= 0 ? 'Ahora' : formatUntil(minutes);
+      when.classList.toggle('is-soon', minutes < 24 * 60);
+
+      li.title = `${event.summary}\n${event.start.toLocaleString('es-ES')}`;
+      li.append(date, body, when);
+      return li;
+    });
+    tasksList.replaceChildren(...items);
+  }
+
+  tasksSetup.addEventListener('submit', async event => {
+    event.preventDefault();
+    let url;
+    try {
+      url = normalizeIcsUrl(icsInput.value);
+    } catch {
+      setTasksStatus('Pega un enlace http(s) válido', true);
+      icsInput.focus();
+      return;
+    }
+    await chrome.storage.local.set({ [ICS_KEY]: url });
+    loadTasks();
+  });
+
+  tasksSettings.addEventListener('click', async () => showSetup(await getIcsUrl()));
+  icsCancel.addEventListener('click', loadTasks);
+  icsClear.addEventListener('click', async () => {
+    await chrome.storage.local.remove(ICS_KEY);
+    loadSeq++;
+    tasksList.replaceChildren();
+    showSetup();
+  });
+
   // ---------- Horario completo ----------
 
   function openFullSchedule() {
@@ -228,7 +408,10 @@
   // ---------- Eventos ----------
 
   document.getElementById('open-schedule').addEventListener('click', showSchedule);
-  document.getElementById('back-to-menu').addEventListener('click', showMenu);
+  document.getElementById('open-tasks').addEventListener('click', showTasks);
+  document.querySelectorAll('.js-back-to-menu').forEach(button => {
+    button.addEventListener('click', showMenu);
+  });
   document.getElementById('open-full').addEventListener('click', openFullSchedule);
   document.querySelectorAll('.js-toggle-theme').forEach(button => {
     button.addEventListener('click', toggleTheme);
@@ -237,7 +420,13 @@
   nextButton.addEventListener('click', () => changeDay(1));
 
   document.addEventListener('keydown', event => {
-    if (!app.classList.contains('is-schedule')) return;
+    const view = currentView();
+    if (view === 'tasks' && event.key === 'Escape') {
+      event.preventDefault();
+      showMenu();
+      return;
+    }
+    if (view !== 'schedule') return;
     if (event.key === 'ArrowLeft') changeDay(-1);
     else if (event.key === 'ArrowRight') changeDay(1);
     else if (event.key === 'Escape' || event.key === 'Backspace') {
@@ -247,6 +436,5 @@
   });
 
   renderMenu();
-  renderIpeCountdown();
-  setInterval(renderIpeCountdown, 1000);
+  startIPECountdown();
 })();

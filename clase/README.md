@@ -2,8 +2,9 @@
 
 Extensión Manifest V3 (Chrome/Brave) con tu horario de clase.
 
-- **Menú**: botón *Horario* (muestra cuántas clases hay hoy), tarjeta *Entrega IPE* con cuenta atrás en vivo hasta el jueves a las 20:00 (entre el jueves 20:00 y el viernes 00:00 indica que se espera la nueva tarea) y *Próximamente...*. Botón de tema también en la cabecera.
-- **Aviso de IPE**: el service worker programa una alarma para el viernes a las 00:00 y muestra una notificación del sistema cuando se abre la nueva tarea.
+- **Menú**: botón *Horario* (muestra cuántas clases hay hoy), tarjeta *Entrega IPE* con cuenta atrás en vivo hasta el jueves a las 20:00 (entre el jueves 20:00 y el viernes 00:00 muestra *Esperando nueva tarea...*) y *Próximamente...*. Botón de tema también en la cabecera.
+- **Aviso de IPE**: el service worker comprueba la hora cada minuto y, al abrirse la nueva tarea (viernes 00:00), muestra una notificación del sistema. En `chrome.storage.local` guarda qué semana ya se avisó, así que solo avisa una vez por semana (y si Chrome estaba cerrado a medianoche, avisa al abrirlo, siempre antes de la entrega).
+- **Tareas Aula Virtual**: pega el enlace de exportación del calendario de Moodle (Calendario → Exportar calendario → Obtener URL del calendario). Se guarda en `chrome.storage.local` y la vista muestra las tareas pendientes ordenadas por fecha. El engranaje permite cambiar o borrar el enlace.
 - **Horario diario**: abre en el día actual (en fin de semana, el lunes). `‹ L` / `X ›` o las flechas del teclado cambian de día; `Esc` vuelve al menú. Las horas seguidas de la misma asignatura se unen en un solo bloque (nunca a través del recreo) y el tramo en curso aparece resaltado.
 - **Horas**: al pasar el ratón por una hora se ve su estado en vivo: *Ya pasó* (✓), los minutos que quedan si está en curso, o cuánto falta para que empiece (*En 12 min*, *En 2 h*, *En 3 d*).
 - **Tema claro/oscuro**: botón de sol/luna en la barra del horario. La preferencia se guarda en `localStorage` y la comparte el horario completo.
@@ -30,6 +31,7 @@ Todo está en `schedule-data.js`:
 | `theme.js` | Tema claro/oscuro compartido |
 | `ipe.js` | Reglas de la tarea de IPE (entrega y apertura), compartidas |
 | `background.js` | Service worker: alarma y notificación de IPE |
+| `ics.js` | Parseador de calendarios `.ics` (SUMMARY, DTSTART, DTEND, CATEGORIES) |
 | `popup.html` / `popup.css` / `popup.js` | Popup: menú y horario diario |
 | `full_schedule.html` / `full_schedule.css` / `full_schedule.js` | Horario semanal completo |
 | `bg-waves.svg` / `bg-waves-dark.svg` | Fondo de ondas del popup (claro / oscuro) |

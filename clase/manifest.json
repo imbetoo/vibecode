@@ -2,9 +2,10 @@
   "manifest_version": 3,
   "name": "Clase",
   "short_name": "Clase",
-  "version": "1.1.0",
-  "description": "Tu horario de clase de un vistazo: vista diaria en el popup, horario semanal completo en una pestaña y aviso de la tarea de IPE.",
-  "permissions": ["alarms", "notifications"],
+  "version": "1.2.0",
+  "description": "Tu horario de clase de un vistazo: vista diaria en el popup, horario semanal completo, aviso de la tarea de IPE y tareas del Aula Virtual.",
+  "permissions": ["alarms", "notifications", "storage"],
+  "host_permissions": ["<all_urls>"],
   "background": {
     "service_worker": "background.js"
   },

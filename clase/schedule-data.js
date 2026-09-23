@@ -11,7 +11,7 @@ const SUBJECTS = {
   csdawPR:    { name: 'Programación',                   color: '#ff94d0', teacher: 'Marta Rey López',           periods: 9 },
   csdawLMSXI: { name: 'Linguaxe de Marcas e Sistemas',  color: '#7b75ff', teacher: 'Isaac Rincón Moraña',       periods: 4 },
   csdawSSI:   { name: 'Sistemas Informáticos',          color: '#47ff94', teacher: 'Cristina Puga Barreiros',   periods: 6 },
-  csdawIPEI:  { name: 'Itinerario Persoal para a Empr', color: '#ffb36b', teacher: 'Adelina Cobo Rodríguez',    periods: 4 },
+  csdawIPEI:  { name: 'Itinerario Persoal para a Empresa', color: '#ffb36b', teacher: 'Adelina Cobo Rodríguez',    periods: 4 },
   csdawSASP:  { name: 'Sustentabilidade Aplicada',      color: '#f06a5a', teacher: 'Agustín Sobral Crespo',     periods: 1 }
 };
 

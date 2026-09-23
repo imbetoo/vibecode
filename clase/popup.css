@@ -50,6 +50,9 @@ body.dark-theme {
 
 * { box-sizing: border-box; }
 
+/* Que el atributo hidden gane a los display de las clases. */
+[hidden] { display: none !important; }
+
 html, body {
   margin: 0;
   width: 360px;
@@ -101,11 +104,16 @@ button:focus-visible {
   will-change: transform, opacity;
 }
 
-.view--menu      { transform: translateX(0);    opacity: 1; }
-.view--schedule  { transform: translateX(100%); opacity: 0; }
+.view--menu { transform: translateX(0); opacity: 1; }
 
-.app.is-schedule .view--menu     { transform: translateX(-30%); opacity: 0; }
-.app.is-schedule .view--schedule { transform: translateX(0);    opacity: 1; }
+.view--schedule,
+.view--tasks { transform: translateX(100%); opacity: 0; }
+
+.app.is-schedule .view--menu,
+.app.is-tasks .view--menu { transform: translateX(-30%); opacity: 0; }
+
+.app.is-schedule .view--schedule,
+.app.is-tasks .view--tasks { transform: translateX(0); opacity: 1; }
 
 @media (prefers-reduced-motion: reduce) {
   .view, .day-grid, .time-pill *, .subject-block {
@@ -119,14 +127,14 @@ button:focus-visible {
 .view--menu {
   display: flex;
   flex-direction: column;
-  padding-top: 44px;
+  padding-top: 32px;
 }
 
 .menu-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 28px;
+  margin-bottom: 22px;
   padding: 0 4px;
 }
 
@@ -151,7 +159,7 @@ button:focus-visible {
 .menu-buttons {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
 }
 
 .menu-button {
@@ -159,8 +167,8 @@ button:focus-visible {
   align-items: center;
   gap: 14px;
   width: 100%;
-  min-height: 92px;
-  padding: 18px;
+  min-height: 84px;
+  padding: 16px 18px;
   text-align: left;
   border-radius: 22px;
   background: var(--glass-strong);
@@ -193,8 +201,12 @@ button:focus-visible {
 }
 
 .menu-button__title {
-  font-size: 19px;
+  font-size: 18px;
   font-weight: 700;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .menu-button__subtitle {
@@ -207,6 +219,7 @@ button:focus-visible {
 .menu-button--card { cursor: default; }
 
 .menu-button__icon--ipe { background: #ffb36b; }
+.menu-button__icon--tasks { background: #47ff94; }
 
 .menu-button__subtitle { font-variant-numeric: tabular-nums; }
 
@@ -509,3 +522,192 @@ button:focus-visible {
 .empty-day__title { font-size: 17px; font-weight: 700; }
 .empty-day__text  { font-size: 13px; color: var(--text-soft); }
 .empty-day__text code { white-space: nowrap; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+
+/* ---------- Vista 3: tareas del Aula Virtual ---------- */
+
+.view--tasks {
+  display: flex;
+  flex-direction: column;
+  padding-top: 12px;
+}
+
+.tasks-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 10px 4px 14px;
+}
+
+.tasks-title {
+  margin: 0;
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.tasks-status {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-soft);
+  text-align: right;
+}
+
+.tasks-status.is-error { color: #ff453a; }
+
+/* Formulario del enlace */
+
+.tasks-setup {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px;
+  border-radius: 22px;
+  background: var(--glass-strong);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 10px 30px var(--shadow);
+}
+
+.tasks-label {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.tasks-input {
+  width: 100%;
+  height: 40px;
+  padding: 0 12px;
+  font: 500 13px var(--font);
+  color: var(--text);
+  border-radius: 12px;
+  border: 1px solid var(--glass-border);
+  background: var(--control);
+  outline: none;
+  transition: border-color var(--t-hover) var(--ease), box-shadow var(--t-hover) var(--ease);
+}
+
+.tasks-input:focus {
+  border-color: #0a84ff;
+  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.25);
+}
+
+.tasks-hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-soft);
+}
+
+.tasks-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.tasks-button {
+  height: 34px;
+  padding: 0 13px;
+  font-size: 12.5px;
+  white-space: nowrap;
+  font-weight: 700;
+  border-radius: 17px;
+  color: var(--icon);
+  background: var(--control);
+  transition: background var(--t-hover) var(--ease), transform var(--t-hover) var(--ease);
+}
+
+.tasks-button:hover  { background: var(--control-hover); }
+.tasks-button:active { transform: scale(0.95); }
+
+.tasks-button--primary,
+.tasks-button--primary:hover { color: #fff; background: #0a84ff; }
+
+.tasks-button--danger { margin-left: auto; color: #ff453a; }
+
+/* Lista de eventos */
+
+.tasks-list {
+  flex: 1;
+  min-height: 0;
+  margin: 0 -6px;
+  padding: 0 6px 12px;
+  list-style: none;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.task {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 4px;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.task:last-child { border-bottom: 0; }
+
+.task__date {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  line-height: 1;
+  color: var(--pill-text);
+  border-radius: 12px;
+  background: var(--pill-bg);
+}
+
+.task__day   { font-size: 18px; font-weight: 800; }
+.task__month { margin-top: 2px; font-size: 10px; font-weight: 700; text-transform: uppercase; opacity: 0.75; }
+
+.task__body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
+}
+
+.task__title {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.25;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.task__meta {
+  font-size: 12px;
+  color: var(--text-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.task__when {
+  flex: none;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 999px;
+  color: var(--icon);
+  background: var(--control);
+}
+
+.task__when.is-soon { color: #fff; background: #ff9f0a; }
+
+.tasks-empty {
+  padding: 36px 20px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-soft);
+  border-radius: 22px;
+  border: 1px dashed var(--dashed);
+}
