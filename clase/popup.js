@@ -29,6 +29,15 @@
       : `${prefix}: sin clases cargadas`;
   }
 
+  // ---------- Cuenta atrás de la entrega de IPE ----------
+
+  const ipeText = document.getElementById('ipe-countdown-text');
+
+  function renderIpeCountdown() {
+    const text = ipeCountdownText();
+    if (ipeText.textContent !== text) ipeText.textContent = text;
+  }
+
   // ---------- Navegación entre vistas ----------
 
   function showSchedule() {
@@ -221,7 +230,9 @@
   document.getElementById('open-schedule').addEventListener('click', showSchedule);
   document.getElementById('back-to-menu').addEventListener('click', showMenu);
   document.getElementById('open-full').addEventListener('click', openFullSchedule);
-  document.getElementById('toggle-theme').addEventListener('click', toggleTheme);
+  document.querySelectorAll('.js-toggle-theme').forEach(button => {
+    button.addEventListener('click', toggleTheme);
+  });
   prevButton.addEventListener('click', () => changeDay(-1));
   nextButton.addEventListener('click', () => changeDay(1));
 
@@ -236,4 +247,6 @@
   });
 
   renderMenu();
+  renderIpeCountdown();
+  setInterval(renderIpeCountdown, 1000);
 })();

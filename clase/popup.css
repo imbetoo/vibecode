@@ -122,7 +122,15 @@ button:focus-visible {
   padding-top: 44px;
 }
 
-.menu-header { margin-bottom: 28px; padding: 0 4px; }
+.menu-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 28px;
+  padding: 0 4px;
+}
+
+.menu-header .toolbar-button { margin-top: 6px; }
 
 .menu-title {
   margin: 0;
@@ -162,8 +170,8 @@ button:focus-visible {
   transition: transform var(--t-hover) var(--ease), background var(--t-hover) var(--ease);
 }
 
-.menu-button:not(:disabled):hover  { background: var(--glass-hover); }
-.menu-button:not(:disabled):active { transform: scale(0.97); }
+.menu-button:not(:disabled, .menu-button--card):hover  { background: var(--glass-hover); }
+.menu-button:not(:disabled, .menu-button--card):active { transform: scale(0.97); }
 
 .menu-button__icon {
   display: grid;
@@ -195,6 +203,12 @@ button:focus-visible {
 }
 
 .menu-button__chevron { color: var(--icon); opacity: 0.6; }
+
+.menu-button--card { cursor: default; }
+
+.menu-button__icon--ipe { background: #ffb36b; }
+
+.menu-button__subtitle { font-variant-numeric: tabular-nums; }
 
 .menu-button--soon {
   cursor: default;
