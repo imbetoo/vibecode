@@ -15,8 +15,9 @@
   const row = slotId => slotRow(slotId) + HEADER_ROWS;
   const dayColumn = index => index + 2;
 
-  // Filas: cabecera, tramos y el hueco del recreo.
-  const rows = ['auto', ...slots.map(() => 'var(--row-h)')];
+  // Filas: cabecera, tramos y el hueco del recreo. Los tramos crecen si un
+  // nombre largo necesita más alto, así nunca se corta el texto.
+  const rows = ['auto', ...slots.map(() => 'minmax(var(--row-h), auto)')];
   if (slots.length > BREAK.afterSlot) rows.splice(BREAK.afterSlot + HEADER_ROWS, 0, 'var(--break-h)');
   grid.style.gridTemplateRows = rows.join(' ');
 
@@ -38,8 +39,19 @@
 
   // Cabecera
   add(div('corner'), 1, null, 1);
+  const dates = weekDates(now);
   WEEK.forEach((day, i) => {
-    const head = div('day-head' + (i === todayCol ? ' is-today' : ''), day.name);
+    const head = div('day-head' + (i === todayCol ? ' is-today' : ''));
+    const pill = document.createElement('span');
+    pill.className = 'day-head__pill';
+    pill.title = dates[i].toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
+    const name = document.createElement('span');
+    name.textContent = day.name;
+    const num = document.createElement('span');
+    num.className = 'day-head__num';
+    num.textContent = String(dates[i].getDate());
+    pill.append(name, num);
+    head.append(pill);
     add(head, 1, null, dayColumn(i));
   });
 
@@ -89,20 +101,43 @@
 
   grid.replaceChildren(fragment);
 
-  // Leyenda
+  // Leyenda: pastilla que al pasar el ratón se abre con profesor y periodos.
   const legend = document.getElementById('legend-list');
   Object.entries(SUBJECTS).forEach(([code, subject]) => {
     const item = document.createElement('li');
     item.className = 'legend-item';
+    item.tabIndex = 0;
+
+    const head = div('legend-head');
     const swatch = document.createElement('span');
     swatch.className = 'legend-swatch';
     swatch.style.background = subject.color;
     const name = document.createElement('span');
+    name.className = 'legend-name';
     name.textContent = subject.name;
-    const codeEl = document.createElement('span');
-    codeEl.className = 'legend-code';
-    codeEl.textContent = code;
-    item.append(swatch, name, codeEl);
+    const headCode = document.createElement('span');
+    headCode.className = 'legend-code';
+    headCode.textContent = code;
+    head.append(swatch, name, headCode);
+
+    const details = div('legend-details');
+    details.append(div('legend-teacher', subject.teacher || 'Por asignar'));
+    if (subject.periods) {
+      const remaining = Math.max(0, subject.periods - periodsDoneThisWeek(code, now));
+      const periods = div('legend-periods');
+      periods.append(
+        `${subject.periods} ${subject.periods === 1 ? 'periodo semanal' : 'periodos semanais'},`,
+        document.createElement('br'),
+        `${remaining} ${remaining === 1 ? 'restante' : 'restantes'} `
+      );
+      const detailCode = document.createElement('span');
+      detailCode.className = 'legend-code';
+      detailCode.textContent = ` ${code}`;
+      periods.append(detailCode);
+      details.append(periods);
+    }
+
+    item.append(head, details);
     legend.append(item);
   });
 })();

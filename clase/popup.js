@@ -46,19 +46,49 @@
 
   // ---------- Horario diario ----------
 
+  const CLOCK_ICON =
+    '<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">' +
+    '<circle cx="12" cy="12" r="11" fill="currentColor"/>' +
+    '<path d="M12 6.5V12l3.5 2.5" fill="none" stroke="var(--pill-bg)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>' +
+    '</svg>';
+
   function createTimePill(slot, isNow) {
     const pill = document.createElement('div');
     pill.className = 'time-pill' + (isNow ? ' is-now' : '');
     pill.style.gridRow = String(slotRow(slot.id));
     pill.setAttribute('aria-label', `${formatTime(slot.start)} a ${formatTime(slot.end)}`);
 
+    const times = document.createElement('span');
+    times.className = 'time-pill__times';
     const start = document.createElement('span');
     start.textContent = formatTime(slot.start);
+    const dash = document.createElement('span');
+    dash.className = 'time-pill__dash';
     const end = document.createElement('span');
-    end.className = 'time-pill__end';
     end.textContent = formatTime(slot.end);
+    times.append(start, dash, end);
 
-    pill.append(start, end);
+    // Al pasar el ratón: duración del tramo o, si está en curso, lo que queda.
+    const duration = document.createElement('span');
+    duration.className = 'time-pill__duration';
+    duration.setAttribute('aria-hidden', 'true');
+    const minutes = document.createElement('span');
+    minutes.className = 'time-pill__minutes';
+    duration.append(minutes);
+    duration.insertAdjacentHTML('beforeend', CLOCK_ICON);
+
+    const updateMinutes = () => {
+      const now = new Date();
+      const nowMin = now.getHours() * 60 + now.getMinutes();
+      const running = isNow && nowMin >= toMinutes(slot.start) && nowMin < toMinutes(slot.end);
+      const value = running ? toMinutes(slot.end) - nowMin : slotMinutes(slot);
+      minutes.textContent = `${value} min`;
+      pill.title = running ? `Quedan ${value} min` : `Duración: ${value} min`;
+    };
+    updateMinutes();
+    pill.addEventListener('mouseenter', updateMinutes);
+
+    pill.append(times, duration);
     return pill;
   }
 
@@ -156,6 +186,7 @@
   document.getElementById('open-schedule').addEventListener('click', showSchedule);
   document.getElementById('back-to-menu').addEventListener('click', showMenu);
   document.getElementById('open-full').addEventListener('click', openFullSchedule);
+  document.getElementById('toggle-theme').addEventListener('click', toggleTheme);
   prevButton.addEventListener('click', () => changeDay(-1));
   nextButton.addEventListener('click', () => changeDay(1));
 

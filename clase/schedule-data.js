@@ -3,16 +3,17 @@
  * del horario completo. Para cambiar el horario basta con editar este archivo.
  */
 
-// Asignaturas: nombre visible y color del bloque.
+// Asignaturas: nombre visible, color del bloque, profesor y periodos semanales.
+// Los profesores "Por asignar" y los periodos son provisionales: revísalos.
 const SUBJECTS = {
-  csdawBD:    { name: 'Bases de Datos',                 color: '#6accff' },
-  csdawIP:    { name: 'Inglés Profesional',             color: '#ffe95e' },
-  csdawCD:    { name: 'Contornos de Desenvolvemento',   color: '#921200' },
-  csdawPR:    { name: 'Programación',                   color: '#ff94d0' },
-  csdawLMSXI: { name: 'Linguaxe de Marcas e Sistemas',  color: '#7b75ff' },
-  csdawSSI:   { name: 'Sistemas Informáticos',          color: '#47ff94' },
-  csdawIPEI:  { name: 'Itinerario Persoal para a Empr', color: '#ffb36b' },
-  csdawSASP:  { name: 'Sustentabilidade Aplicada',      color: '#f06a5a' }
+  csdawBD:    { name: 'Bases de Datos',                 color: '#6accff', teacher: 'Isaac Rincón Moraña', periods: 4 },
+  csdawIP:    { name: 'Inglés Profesional',             color: '#ffe95e', teacher: 'Por asignar',         periods: 2 },
+  csdawCD:    { name: 'Contornos de Desenvolvemento',   color: '#921200', teacher: 'Por asignar',         periods: 3 },
+  csdawPR:    { name: 'Programación',                   color: '#ff94d0', teacher: 'Por asignar',         periods: 7 },
+  csdawLMSXI: { name: 'Linguaxe de Marcas e Sistemas',  color: '#7b75ff', teacher: 'Por asignar',         periods: 4 },
+  csdawSSI:   { name: 'Sistemas Informáticos',          color: '#47ff94', teacher: 'Por asignar',         periods: 5 },
+  csdawIPEI:  { name: 'Itinerario Persoal para a Empr', color: '#ffb36b', teacher: 'Por asignar',         periods: 3 },
+  csdawSASP:  { name: 'Sustentabilidade Aplicada',      color: '#f06a5a', teacher: 'Por asignar',         periods: 2 }
 };
 
 // Tramos horarios fijos. El recreo va entre el tramo 4 y el 5.
@@ -111,6 +112,41 @@ function currentSlotId(date = new Date()) {
   const now = date.getHours() * 60 + date.getMinutes();
   const slot = TIME_SLOTS.find(s => now >= toMinutes(s.start) && now < toMinutes(s.end));
   return slot ? slot.id : null;
+}
+
+/** Duración de un tramo en minutos. */
+function slotMinutes(slot) {
+  return toMinutes(slot.end) - toMinutes(slot.start);
+}
+
+/**
+ * Fechas (Date) de lunes a viernes de la semana que se muestra: la actual,
+ * o la siguiente si es fin de semana (igual que todayIndex).
+ */
+function weekDates(date = new Date()) {
+  const d = date.getDay();
+  const offset = d === 0 ? 1 : d === 6 ? 2 : 1 - d;
+  return WEEK.map((_, i) => new Date(date.getFullYear(), date.getMonth(), date.getDate() + offset + i));
+}
+
+/**
+ * Periodos de una asignatura que ya han terminado esta semana según WEEK.
+ * En fin de semana cuenta como semana nueva (0).
+ */
+function periodsDoneThisWeek(code, date = new Date()) {
+  const d = date.getDay();
+  if (d === 0 || d === 6) return 0;
+  const today = d - 1;
+  const now = date.getHours() * 60 + date.getMinutes();
+  let done = 0;
+  WEEK.forEach((day, i) => {
+    for (const [slotId, c] of Object.entries(day.classes)) {
+      if (c !== code || i > today) continue;
+      const slot = TIME_SLOTS.find(s => s.id === Number(slotId));
+      if (i < today || now >= toMinutes(slot.end)) done++;
+    }
+  });
+  return done;
 }
 
 /** Color de texto legible (oscuro o claro) sobre un fondo dado. */
