@@ -1,28 +1,32 @@
 /**
- * Smart Tab Grouper — service worker (Manifest V3).
+ * bSTG — service worker (Manifest V3).
  *
  * Agrupa automáticamente las pestañas de cada ventana según su dominio
- * principal y deshace los grupos que se quedan con una sola pestaña.
+ * principal y deshace los grupos que se quedan con una sola pestaña. El
+ * título de cada grupo sale de las reglas personalizadas guardadas en
+ * chrome.storage.sync (popup) o, si no hay regla, del propio dominio.
  *
  * Diseño:
  *  - Los eventos de pestañas NO modifican nada directamente: solo marcan la
  *    ventana afectada como "sucia" y reinician un temporizador (debounce).
- *  - Cuando el temporizador vence, cada ventana sucia se "reconcilia": se lee
- *    su estado real con la API y se calcula qué agrupar / desagrupar.
- *  - Las reconciliaciones se serializan en una cola de promesas, de modo que
- *    nunca hay dos ejecutándose a la vez sobre las mismas pestañas.
+ *  - Cuando el temporizador vence, cada ventana sucia se "reconcilia": se
+ *    leen (de forma asíncrona) las reglas de storage y el estado real de la
+ *    ventana, y se calcula qué agrupar / desagrupar.
+ *  - Reconciliaciones y renombrados se serializan en una cola de promesas,
+ *    de modo que nunca hay dos ejecutándose a la vez sobre las mismas pestañas.
  *  - Toda llamada que muta pestañas tolera que éstas desaparezcan entre la
  *    lectura y la escritura (pestaña cerrada, ventana cerrada, arrastre...).
  *
  * Un grupo se considera "gestionado" por la extensión cuando su título
- * coincide con la etiqueta de dominio de alguna de sus pestañas (p. ej. el
- * grupo "Github" que contiene una pestaña de github.com). Los grupos creados
- * manualmente con otro nombre se respetan y sus pestañas no se tocan. Este
- * criterio no requiere estado persistente, por lo que sobrevive a que el
- * navegador suspenda el service worker (y evita pedir el permiso `storage`).
+ * coincide con el título que le corresponde a alguna de sus pestañas (p. ej.
+ * el grupo "Desarrollo" que contiene una pestaña de github.com cuando existe
+ * la regla github.com -> Desarrollo). Los grupos creados manualmente con otro
+ * nombre se respetan y sus pestañas no se tocan.
  */
 
 'use strict';
+
+importScripts('shared.js'); /* global BSTG */
 
 /* ------------------------------------------------------------------------ */
 /* Configuración                                                            */
@@ -50,91 +54,38 @@ const GROUP_COLORS = Object.freeze([
  *  chrome-extension://, devtools://, view-source:, etc. quedan fuera. */
 const ALLOWED_PROTOCOLS = new Set(['http:', 'https:']);
 
-/**
- * Segundos niveles genéricos bajo ccTLDs (bbc.co.uk, mercadolibre.com.ar,
- * boe.gob.es...). Heurística ligera en lugar de la Public Suffix List
- * completa, para no añadir dependencias.
- */
-const GENERIC_SECOND_LEVELS = new Set([
-  'ac', 'co', 'com', 'edu', 'gob', 'gov', 'go', 'mil', 'ne', 'net', 'nic',
-  'nom', 'or', 'org', 'ltd', 'plc', 'sch',
-]);
-
-/** Sufijos de hosting compartido en los que cada subdominio es un sitio
- *  distinto (usuario.github.io no es "github.io"). */
-const SHARED_HOSTING_SUFFIXES = new Set([
-  'github.io', 'gitlab.io', 'blogspot.com', 'herokuapp.com', 'netlify.app',
-  'vercel.app', 'pages.dev', 'workers.dev', 'web.app', 'firebaseapp.com',
-  'azurewebsites.net', 'cloudfront.net', 'appspot.com', 'wordpress.com',
-  'tumblr.com', 'neocities.org', 'glitch.me', 'onrender.com', 'fly.dev',
-]);
+/** Mensaje que envía el botón "Reagrupar ahora" del popup. */
+const MSG_REGROUP_ALL = 'bstg:regroup-all';
 
 const TAB_GROUP_ID_NONE = chrome.tabGroups.TAB_GROUP_ID_NONE; // -1
 const WINDOW_ID_NONE = chrome.windows.WINDOW_ID_NONE; // -1
 
 /* ------------------------------------------------------------------------ */
-/* Utilidades de dominio                                                    */
+/* Títulos y colores                                                        */
 /* ------------------------------------------------------------------------ */
 
-const IPV4_RE = /^\d{1,3}(\.\d{1,3}){3}$/;
-
 /**
- * Devuelve el dominio principal de un hostname.
- *   github.com            -> github.com
- *   gist.github.com       -> github.com
- *   www.bbc.co.uk         -> bbc.co.uk
- *   alice.github.io       -> alice.github.io
- *   192.168.1.10 / [::1]  -> tal cual
- *   localhost             -> localhost
- * @param {string} hostname
- * @returns {string|null}
+ * Lee las reglas de nombre. Si storage falla por cualquier motivo se sigue
+ * funcionando con los nombres por defecto en lugar de bloquear el agrupado.
+ * @returns {Promise<Map<string, string>>}
  */
-function getMainDomain(hostname) {
-  const host = (hostname || '').toLowerCase().replace(/\.$/, '');
-  if (!host) return null;
-
-  // Direcciones IP (IPv6 llega entre corchetes en URL.hostname).
-  if (IPV4_RE.test(host) || host.includes(':') || host.startsWith('[')) {
-    return host;
+async function loadRulesSafe() {
+  try {
+    return await BSTG.loadRules();
+  } catch (error) {
+    console.warn('[bSTG] No se pudieron leer las reglas; se usan los nombres por defecto:', error);
+    return new Map();
   }
-
-  const labels = host.split('.').filter(Boolean);
-  if (labels.length <= 2) return labels.join('.');
-
-  let take = 2;
-  const tld = labels[labels.length - 1];
-  const secondLevel = labels[labels.length - 2];
-
-  if (tld.length === 2 && GENERIC_SECOND_LEVELS.has(secondLevel)) {
-    take = 3;
-  } else if (SHARED_HOSTING_SUFFIXES.has(`${secondLevel}.${tld}`)) {
-    take = 3;
-  }
-
-  return labels.slice(-take).join('.');
 }
 
 /**
- * Convierte un dominio principal en el título del grupo.
- *   github.com -> "Github", bbc.co.uk -> "Bbc", 10.0.0.1 -> "10.0.0.1"
- * @param {string} domain
- * @returns {string}
- */
-function domainToLabel(domain) {
-  if (IPV4_RE.test(domain) || domain.startsWith('[') || !domain.includes('.')) {
-    return domain === 'localhost' ? 'Localhost' : domain;
-  }
-  const name = domain.split('.')[0];
-  return name.charAt(0).toUpperCase() + name.slice(1);
-}
-
-/**
- * Etiqueta de agrupación de una pestaña, o null si no debe agruparse.
+ * Título de grupo que corresponde a una pestaña, o null si no debe agruparse.
  * Se usa `pendingUrl` cuando existe porque refleja la navegación en curso.
  * @param {chrome.tabs.Tab} tab
+ * @param {Map<string, string>} rules
  * @returns {string|null}
  */
-function getTabLabel(tab) {
+function getTabLabel(tab, rules) {
   if (tab.pinned) return null; // Las pestañas fijadas no pueden estar en grupos.
 
   const rawUrl = tab.pendingUrl || tab.url;
@@ -148,12 +99,11 @@ function getTabLabel(tab) {
   }
   if (!ALLOWED_PROTOCOLS.has(url.protocol)) return null;
 
-  const domain = getMainDomain(url.hostname);
-  return domain ? domainToLabel(domain) : null;
+  return BSTG.resolveGroupTitle(url.hostname, rules);
 }
 
 /**
- * Color estable para una etiqueta: el mismo dominio recibe siempre el mismo
+ * Color estable para un título: el mismo nombre recibe siempre el mismo
  * color, lo que ayuda a reconocer los grupos de un vistazo.
  * @param {string} label
  * @returns {string}
@@ -305,15 +255,16 @@ async function safeUpdateGroup(groupId, props) {
 /**
  * Lee el estado actual de una ventana y lo pre-procesa.
  * @param {number} windowId
+ * @param {Map<string, string>} rules
  */
-async function takeSnapshot(windowId) {
+async function takeSnapshot(windowId, rules) {
   const [tabs, groups] = await Promise.all([
     chrome.tabs.query({ windowId }),
     chrome.tabGroups.query({ windowId }),
   ]);
 
   /** @type {Map<number, string|null>} */
-  const labelByTab = new Map(tabs.map((tab) => [tab.id, getTabLabel(tab)]));
+  const labelByTab = new Map(tabs.map((tab) => [tab.id, getTabLabel(tab, rules)]));
 
   /** @type {Map<number, chrome.tabGroups.TabGroup>} */
   const managedGroups = new Map();
@@ -329,8 +280,8 @@ async function takeSnapshot(windowId) {
 
 /**
  * Lleva una ventana al estado deseado:
- *  1. Saca de los grupos gestionados las pestañas cuyo dominio ya no coincide.
- *  2. Agrupa las pestañas que comparten dominio (2 o más).
+ *  1. Saca de los grupos gestionados las pestañas cuyo título ya no coincide.
+ *  2. Agrupa las pestañas que comparten título (2 o más).
  *  3. Deshace los grupos gestionados que se quedan con una sola pestaña.
  * @param {number} windowId
  */
@@ -338,9 +289,13 @@ async function reconcileWindow(windowId) {
   const win = await chrome.windows.get(windowId).catch(() => null);
   if (!win || win.type !== 'normal') return; // Solo las ventanas normales admiten grupos.
 
-  const { tabs, labelByTab, managedGroups } = await takeSnapshot(windowId);
+  // Las reglas se consultan (de forma asíncrona) antes de calcular ningún
+  // título. Se leen una sola vez por reconciliación para que todas las
+  // decisiones de esta pasada usen el mismo conjunto de reglas.
+  const rules = await loadRulesSafe();
+  const { tabs, labelByTab, managedGroups } = await takeSnapshot(windowId, rules);
 
-  // --- 1. Pestañas que navegaron a otro dominio (o a una página interna). ---
+  // --- 1. Pestañas que ya no encajan en su grupo (otro dominio, regla nueva o página interna). ---
   const strayTabIds = tabs
     .filter((tab) => {
       const group = managedGroups.get(tab.groupId);
@@ -350,7 +305,7 @@ async function reconcileWindow(windowId) {
   await safeUngroupTabs(strayTabIds, windowId);
   const strayIds = new Set(strayTabIds);
 
-  // --- 2. Agrupar por etiqueta de dominio. ---
+  // --- 2. Agrupar por título (regla personalizada o dominio). ---
   /** @type {Map<string, chrome.tabs.Tab[]>} */
   const buckets = new Map();
   for (const tab of tabs) {
@@ -414,7 +369,7 @@ async function reconcileWindow(windowId) {
 
   // --- 3. Limpieza: grupos gestionados con una única pestaña. ---
   // Se relee el estado porque los pasos anteriores (y el usuario) lo cambian.
-  const after = await takeSnapshot(windowId);
+  const after = await takeSnapshot(windowId, rules);
   const tabsPerGroup = new Map();
   for (const tab of after.tabs) {
     if (after.managedGroups.has(tab.groupId)) {
@@ -428,6 +383,80 @@ async function reconcileWindow(windowId) {
   }
   await safeUngroupTabs(lonelyTabIds, windowId);
 }
+/* ------------------------------------------------------------------------ */
+/* Cambios de reglas                                                        */
+/* ------------------------------------------------------------------------ */
+
+/**
+ * Reconstruye las reglas tal y como estaban antes de un cambio de storage.
+ * @param {Map<string, string>} currentRules
+ * @param {Record<string, chrome.storage.StorageChange>} changes
+ * @returns {Map<string, string>}
+ */
+function previousRules(currentRules, changes) {
+  const rules = new Map(currentRules);
+  for (const [key, change] of Object.entries(changes)) {
+    if (!key.startsWith(BSTG.RULE_PREFIX)) continue;
+    const domain = key.slice(BSTG.RULE_PREFIX.length);
+    if (typeof change.oldValue === 'string' && change.oldValue) {
+      rules.set(domain, change.oldValue);
+    } else {
+      rules.delete(domain);
+    }
+  }
+  return rules;
+}
+
+/**
+ * Tras añadir, cambiar o borrar una regla, renombra los grupos existentes en
+ * lugar de destruirlos y recrearlos: el grupo "Github" pasa a llamarse
+ * "Desarrollo" conservando su posición y sus pestañas. Sin este paso el
+ * grupo antiguo dejaría de reconocerse como gestionado (su título ya no
+ * coincidiría con el de ninguna pestaña) y se quedaría huérfano.
+ *
+ * Solo se tocan grupos que eran gestionados con las reglas anteriores. Lo
+ * que no encaje (pestañas que ahora van a otro grupo, grupos que ahora
+ * comparten nombre y deben fusionarse) lo resuelve la reconciliación.
+ *
+ * @param {Map<string, string>} oldRules
+ * @param {Map<string, string>} newRules
+ */
+async function renameGroupsAfterRuleChange(oldRules, newRules) {
+  const windows = await chrome.windows.getAll({ windowTypes: ['normal'], populate: true });
+
+  for (const win of windows) {
+    const groups = await chrome.tabGroups.query({ windowId: win.id }).catch(() => []);
+
+    for (const group of groups) {
+      if (!group.title) continue;
+
+      // Pestañas del grupo que lo hacían "gestionado" con las reglas antiguas.
+      const ownTabs = win.tabs.filter(
+        (tab) => tab.groupId === group.id && getTabLabel(tab, oldRules) === group.title,
+      );
+      if (ownTabs.length === 0) continue; // Grupo del usuario: no se toca.
+
+      // Nuevo título: el mayoritario entre esas pestañas con las reglas nuevas.
+      const votes = new Map();
+      for (const tab of ownTabs) {
+        const title = getTabLabel(tab, newRules);
+        if (title) votes.set(title, (votes.get(title) || 0) + 1);
+      }
+      let newTitle = null;
+      let best = 0;
+      for (const [title, count] of votes) {
+        if (count > best) {
+          best = count;
+          newTitle = title;
+        }
+      }
+
+      if (newTitle && newTitle !== group.title) {
+        await safeUpdateGroup(group.id, { title: newTitle, color: colorForLabel(newTitle) });
+      }
+    }
+  }
+}
 
 /* ------------------------------------------------------------------------ */
 /* Debounce + cola serializada                                              */
@@ -436,8 +465,20 @@ async function reconcileWindow(windowId) {
 /** Ventanas pendientes de reconciliar. */
 const dirtyWindows = new Set();
 let debounceTimer = null;
-/** Cola que garantiza que las reconciliaciones nunca se solapan. */
+/** Cola que garantiza que las operaciones sobre grupos nunca se solapan. */
 let queue = Promise.resolve();
+
+/**
+ * Añade una tarea a la cola. Un error en una tarea no bloquea las siguientes.
+ * @param {() => Promise<void>} task
+ * @param {string} description
+ */
+function enqueue(task, description) {
+  queue = queue.then(task).catch((error) => {
+    if (!isGoneError(error)) console.warn(`[bSTG] Error en ${description}:`, error);
+  });
+  return queue;
+}
 
 /**
  * Marca una ventana como pendiente y (re)inicia el debounce.
@@ -455,16 +496,9 @@ function flushDirtyWindows() {
   const windowIds = [...dirtyWindows];
   dirtyWindows.clear();
 
-  queue = queue.then(async () => {
-    for (const windowId of windowIds) {
-      try {
-        await reconcileWindow(windowId);
-      } catch (error) {
-        if (isGoneError(error)) continue; // La ventana se cerró mientras tanto.
-        console.warn(`[Smart Tab Grouper] Error reconciliando la ventana ${windowId}:`, error);
-      }
-    }
-  });
+  for (const windowId of windowIds) {
+    enqueue(() => reconcileWindow(windowId), `la reconciliación de la ventana ${windowId}`);
+  }
 }
 
 async function scheduleAllWindows() {
@@ -472,7 +506,7 @@ async function scheduleAllWindows() {
     const windows = await chrome.windows.getAll({ windowTypes: ['normal'] });
     windows.forEach((win) => scheduleWindow(win.id));
   } catch (error) {
-    console.warn('[Smart Tab Grouper] No se pudieron enumerar las ventanas:', error);
+    console.warn('[bSTG] No se pudieron enumerar las ventanas:', error);
   }
 }
 
@@ -507,6 +541,28 @@ chrome.tabs.onAttached.addListener((tabId, attachInfo) => {
   scheduleWindow(attachInfo.newWindowId);
 });
 
+// Reglas añadidas/editadas/borradas desde el popup (o sincronizadas desde
+// otro dispositivo): renombrar los grupos afectados y reconciliar todo.
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName !== 'sync') return;
+  if (!Object.keys(changes).some((key) => key.startsWith(BSTG.RULE_PREFIX))) return;
+
+  enqueue(async () => {
+    const newRules = await loadRulesSafe();
+    await renameGroupsAfterRuleChange(previousRules(newRules, changes), newRules);
+  }, 'el renombrado de grupos');
+  scheduleAllWindows();
+});
+
+// Botón "Reagrupar ahora" del popup.
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message && message.type === MSG_REGROUP_ALL) {
+    scheduleAllWindows().then(() => sendResponse({ ok: true }));
+    return true; // Respuesta asíncrona.
+  }
+  return false;
+});
+
 // Organizar lo que ya estaba abierto al instalar/actualizar y al arrancar.
 chrome.runtime.onInstalled.addListener(() => {
   scheduleAllWindows();
@@ -514,13 +570,3 @@ chrome.runtime.onInstalled.addListener(() => {
 chrome.runtime.onStartup.addListener(() => {
   scheduleAllWindows();
 });
-
-// Clic en el icono: reorganizar todas las ventanas manualmente.
-chrome.action.onClicked.addListener(() => {
-  scheduleAllWindows();
-});
-
-// Exportación para pruebas en Node (no afecta al navegador).
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { getMainDomain, domainToLabel, getTabLabel, colorForLabel };
-}
