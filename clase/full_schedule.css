@@ -1,0 +1,214 @@
+:root {
+  --font: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --text: #ffffff;
+  --text-soft: rgba(235, 238, 255, 0.72);
+  --pill-bg: #1d2130;
+  --header-bg: #3d3d40;
+  --glass: rgba(255, 255, 255, 0.1);
+  --glass-border: rgba(255, 255, 255, 0.14);
+  --row-h: 64px;
+  --break-h: 30px;
+  --gap: 10px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: var(--font);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  background-color: #2a2f52;
+  background-image:
+    radial-gradient(at 8% 4%,   #6f86c9 0px, transparent 50%),
+    radial-gradient(at 92% 10%, #5b6fb0 0px, transparent 45%),
+    radial-gradient(at 85% 70%, #4a3f7a 0px, transparent 50%),
+    radial-gradient(at 5% 85%,  #3f6f86 0px, transparent 45%),
+    radial-gradient(at 50% 100%, #3b3468 0px, transparent 50%);
+}
+
+.page {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 40px 28px 56px;
+}
+
+.page-header { margin-bottom: 28px; }
+
+.page-title {
+  margin: 0;
+  font-size: 40px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.page-date {
+  margin: 6px 0 0;
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--text-soft);
+}
+
+.page-date::first-letter { text-transform: uppercase; }
+
+.board {
+  padding: 22px;
+  border-radius: 28px;
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 20px 60px rgba(10, 12, 40, 0.3);
+  backdrop-filter: blur(20px);
+  overflow-x: auto;
+}
+
+.week-grid {
+  display: grid;
+  grid-template-columns: 76px repeat(5, minmax(140px, 1fr));
+  gap: var(--gap);
+  min-width: 820px;
+}
+
+.day-head {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  font-size: 17px;
+  font-weight: 800;
+  font-style: italic;
+  letter-spacing: 0.04em;
+  border-radius: 999px;
+  background: var(--header-bg);
+}
+
+.day-head.is-today {
+  color: #1d2130;
+  background: #fff;
+}
+
+.time-pill {
+  grid-column: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  border-radius: 12px;
+  background: var(--pill-bg);
+  box-shadow: 0 4px 12px rgba(10, 12, 40, 0.22);
+}
+
+.time-pill::after {
+  content: "";
+  order: 1;
+  width: 12px;
+  height: 2px;
+  margin: 3px 0;
+  border-radius: 1px;
+  background: currentColor;
+}
+
+.time-pill__end { order: 2; }
+
+.break-row {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-soft);
+}
+
+.break-row::before,
+.break-row::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--glass-border);
+}
+
+.empty-cell {
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px dashed rgba(255, 255, 255, 0.1);
+}
+
+.subject-block {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px 16px;
+  border-radius: 16px;
+  box-shadow: 0 8px 22px rgba(10, 12, 40, 0.2);
+  transition: transform 0.25s cubic-bezier(0.25, 0.8, 0.25, 1), box-shadow 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.subject-block:hover {
+  transform: translateY(-2px) scale(1.01);
+  box-shadow: 0 14px 30px rgba(10, 12, 40, 0.3);
+}
+
+.subject-block__name {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.subject-block__meta {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.72;
+}
+
+.legend { margin-top: 32px; }
+
+.legend-title {
+  margin: 0 0 14px;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.legend-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px 8px 10px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 999px;
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+}
+
+.legend-swatch {
+  width: 18px;
+  height: 18px;
+  border-radius: 6px;
+}
+
+.legend-code {
+  font-weight: 500;
+  color: var(--text-soft);
+}

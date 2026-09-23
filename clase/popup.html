@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Clase</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main id="app" class="app">
+    <!-- Vista 1: menú principal -->
+    <section id="menu-view" class="view view--menu" aria-label="Menú principal">
+      <header class="menu-header">
+        <h1 class="menu-title">Clase</h1>
+        <p id="menu-date" class="menu-date"></p>
+      </header>
+
+      <div class="menu-buttons">
+        <button id="open-schedule" class="menu-button" type="button">
+          <span class="menu-button__icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="4.5" width="18" height="16.5" rx="4"/>
+              <path d="M3 9.5h18M8 2.5v4M16 2.5v4"/>
+            </svg>
+          </span>
+          <span class="menu-button__text">
+            <span class="menu-button__title">Horario</span>
+            <span id="menu-summary" class="menu-button__subtitle"></span>
+          </span>
+          <span class="menu-button__chevron" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>
+          </span>
+        </button>
+
+        <button class="menu-button menu-button--soon" type="button" disabled>
+          <span class="menu-button__icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>
+            </svg>
+          </span>
+          <span class="menu-button__text">
+            <span class="menu-button__title">Próximamente...</span>
+            <span class="menu-button__subtitle">Nuevas funciones en camino</span>
+          </span>
+        </button>
+      </div>
+    </section>
+
+    <!-- Vista 2: horario diario -->
+    <section id="schedule-view" class="view view--schedule" aria-label="Horario diario" inert>
+      <div class="toolbar">
+        <button id="back-to-menu" class="toolbar-button" type="button" title="Volver al menú">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>
+          Menú
+        </button>
+        <button id="open-full" class="toolbar-button toolbar-button--icon" type="button" title="Abrir horario completo" aria-label="Abrir horario completo">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></svg>
+        </button>
+      </div>
+
+      <header class="day-header">
+        <button id="prev-day" class="day-nav day-nav--prev" type="button">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>
+          <span id="prev-label" class="day-nav__label"></span>
+        </button>
+        <div class="day-pill-wrap">
+          <h2 id="day-title" class="day-pill"></h2>
+          <span class="day-pill-bar" aria-hidden="true"></span>
+        </div>
+        <button id="next-day" class="day-nav day-nav--next" type="button">
+          <span id="next-label" class="day-nav__label"></span>
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>
+        </button>
+      </header>
+
+      <div id="day-grid" class="day-grid" aria-live="polite"></div>
+    </section>
+  </main>
+
+  <script src="schedule-data.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

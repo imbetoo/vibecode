@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Clase · Horario completo</title>
+  <link rel="stylesheet" href="full_schedule.css">
+</head>
+<body>
+  <main class="page">
+    <header class="page-header">
+      <div>
+        <h1 class="page-title">Horario completo</h1>
+        <p id="page-date" class="page-date"></p>
+      </div>
+    </header>
+
+    <section class="board" aria-label="Horario semanal">
+      <div id="week-grid" class="week-grid"></div>
+    </section>
+
+    <section class="legend" aria-label="Asignaturas">
+      <h2 class="legend-title">Asignaturas</h2>
+      <ul id="legend-list" class="legend-list"></ul>
+    </section>
+  </main>
+
+  <script src="schedule-data.js"></script>
+  <script src="full_schedule.js"></script>
+</body>
+</html>
