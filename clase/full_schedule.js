@@ -108,18 +108,27 @@
     item.className = 'legend-item';
     item.tabIndex = 0;
 
-    const head = div('legend-head');
-    const swatch = document.createElement('span');
-    swatch.className = 'legend-swatch';
-    swatch.style.background = subject.color;
-    const name = document.createElement('span');
-    name.className = 'legend-name';
-    name.textContent = subject.name;
-    const headCode = document.createElement('span');
-    headCode.className = 'legend-code';
-    headCode.textContent = code;
-    head.append(swatch, name, headCode);
+    const makeHead = () => {
+      const head = div('legend-head');
+      const swatch = document.createElement('span');
+      swatch.className = 'legend-swatch';
+      swatch.style.background = subject.color;
+      const name = document.createElement('span');
+      name.className = 'legend-name';
+      name.textContent = subject.name;
+      const headCode = document.createElement('span');
+      headCode.className = 'legend-code';
+      headCode.textContent = code;
+      head.append(swatch, name, headCode);
+      return head;
+    };
 
+    // Copia invisible que reserva el hueco de la pastilla en el flujo.
+    const sizer = div('legend-sizer');
+    sizer.setAttribute('aria-hidden', 'true');
+    sizer.append(makeHead());
+
+    const card = div('legend-card');
     const details = div('legend-details');
     details.append(div('legend-teacher', subject.teacher || 'Por asignar'));
     if (subject.periods) {
@@ -137,7 +146,8 @@
       details.append(periods);
     }
 
-    item.append(head, details);
+    card.append(makeHead(), details);
+    item.append(sizer, card);
     legend.append(item);
   });
 })();

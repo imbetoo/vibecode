@@ -4,16 +4,15 @@
  */
 
 // Asignaturas: nombre visible, color del bloque, profesor y periodos semanales.
-// Los profesores "Por asignar" y los periodos son provisionales: revísalos.
 const SUBJECTS = {
-  csdawBD:    { name: 'Bases de Datos',                 color: '#6accff', teacher: 'Isaac Rincón Moraña', periods: 4 },
-  csdawIP:    { name: 'Inglés Profesional',             color: '#ffe95e', teacher: 'Por asignar',         periods: 2 },
-  csdawCD:    { name: 'Contornos de Desenvolvemento',   color: '#921200', teacher: 'Por asignar',         periods: 3 },
-  csdawPR:    { name: 'Programación',                   color: '#ff94d0', teacher: 'Por asignar',         periods: 7 },
-  csdawLMSXI: { name: 'Linguaxe de Marcas e Sistemas',  color: '#7b75ff', teacher: 'Por asignar',         periods: 4 },
-  csdawSSI:   { name: 'Sistemas Informáticos',          color: '#47ff94', teacher: 'Por asignar',         periods: 5 },
-  csdawIPEI:  { name: 'Itinerario Persoal para a Empr', color: '#ffb36b', teacher: 'Por asignar',         periods: 3 },
-  csdawSASP:  { name: 'Sustentabilidade Aplicada',      color: '#f06a5a', teacher: 'Por asignar',         periods: 2 }
+  csdawBD:    { name: 'Bases de Datos',                 color: '#6accff', teacher: 'Mercedes Hernández Losada', periods: 7 },
+  csdawIP:    { name: 'Inglés Profesional',             color: '#ffe95e', teacher: 'María Elvira Varón Gil',    periods: 2 },
+  csdawCD:    { name: 'Contornos de Desenvolvemento',   color: '#921200', teacher: 'Patricia González Pardo',   periods: 3 },
+  csdawPR:    { name: 'Programación',                   color: '#ff94d0', teacher: 'Marta Rey López',           periods: 9 },
+  csdawLMSXI: { name: 'Linguaxe de Marcas e Sistemas',  color: '#7b75ff', teacher: 'Isaac Rincón Moraña',       periods: 4 },
+  csdawSSI:   { name: 'Sistemas Informáticos',          color: '#47ff94', teacher: 'Cristina Puga Barreiros',   periods: 6 },
+  csdawIPEI:  { name: 'Itinerario Persoal para a Empr', color: '#ffb36b', teacher: 'Adelina Cobo Rodríguez',    periods: 4 },
+  csdawSASP:  { name: 'Sustentabilidade Aplicada',      color: '#f06a5a', teacher: 'Agustín Sobral Crespo',     periods: 1 }
 };
 
 // Tramos horarios fijos. El recreo va entre el tramo 4 y el 5.
@@ -31,9 +30,16 @@ const TIME_SLOTS = [
 const BREAK = { afterSlot: 4, start: '11:30', end: '12:00' };
 
 // Semana de lunes a viernes. `classes` asigna tramo -> código de asignatura.
-// Lunes, miércoles y viernes están pendientes de rellenar.
 const WEEK = [
-  { short: 'L', name: 'Lunes',     classes: {} },
+  {
+    short: 'L', name: 'Lunes',
+    classes: {
+      1: 'csdawSSI',  2: 'csdawSSI',
+      3: 'csdawIPEI', 4: 'csdawIPEI',
+      5: 'csdawSASP',
+      6: 'csdawPR',   7: 'csdawPR'
+    }
+  },
   {
     short: 'M', name: 'Martes',
     classes: {
@@ -43,7 +49,14 @@ const WEEK = [
       6: 'csdawPR', 7: 'csdawPR'
     }
   },
-  { short: 'X', name: 'Miércoles', classes: {} },
+  {
+    short: 'X', name: 'Miércoles',
+    classes: {
+      1: 'csdawSSI',   2: 'csdawSSI',
+      3: 'csdawLMSXI', 4: 'csdawLMSXI',
+      5: 'csdawBD',    6: 'csdawBD',    7: 'csdawBD'
+    }
+  },
   {
     short: 'J', name: 'Jueves',
     classes: {
@@ -53,7 +66,15 @@ const WEEK = [
       7: 'csdawPR',    8: 'csdawPR'
     }
   },
-  { short: 'V', name: 'Viernes',   classes: {} }
+  {
+    short: 'V', name: 'Viernes',
+    classes: {
+      1: 'csdawPR',   2: 'csdawPR',   3: 'csdawPR',
+      4: 'csdawIPEI',
+      5: 'csdawIPEI',
+      6: 'csdawBD',   7: 'csdawBD'
+    }
+  }
 ];
 
 // Tramos que se muestran como mínimo aunque el día acabe antes.
@@ -112,11 +133,6 @@ function currentSlotId(date = new Date()) {
   const now = date.getHours() * 60 + date.getMinutes();
   const slot = TIME_SLOTS.find(s => now >= toMinutes(s.start) && now < toMinutes(s.end));
   return slot ? slot.id : null;
-}
-
-/** Duración de un tramo en minutos. */
-function slotMinutes(slot) {
-  return toMinutes(slot.end) - toMinutes(slot.start);
 }
 
 /**

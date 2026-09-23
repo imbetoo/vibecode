@@ -46,13 +46,46 @@
 
   // ---------- Horario diario ----------
 
-  const CLOCK_ICON =
+  const iconSvg = path =>
     '<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">' +
     '<circle cx="12" cy="12" r="11" fill="currentColor"/>' +
-    '<path d="M12 6.5V12l3.5 2.5" fill="none" stroke="var(--pill-bg)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>' +
+    `<path d="${path}" fill="none" stroke="var(--pill-bg)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>` +
     '</svg>';
+  const CLOCK_ICON = iconSvg('M12 6.5V12l3.5 2.5');
+  const CHECK_ICON = iconSvg('M7 12.5l3.2 3.2L17 9');
 
-  function createTimePill(slot, isNow) {
+  /** Momento (Date) de una hora "HH:MM" en la fecha dada. */
+  function at(date, time) {
+    const [h, m] = time.split(':').map(Number);
+    return new Date(date.getFullYear(), date.getMonth(), date.getDate(), h, m);
+  }
+
+  /** "En 12 min", "En 2 h", "En 3 d" */
+  function formatUntil(minutes) {
+    if (minutes < 60) return `En ${minutes} min`;
+    if (minutes < 24 * 60) return `En ${Math.floor(minutes / 60)} h`;
+    return `En ${Math.round(minutes / (24 * 60))} d`;
+  }
+
+  /**
+   * Estado de un tramo del día mostrado respecto a ahora: terminado,
+   * en curso (minutos que quedan) o futuro (cuánto falta).
+   */
+  function slotStatus(slot, dayDate, now = new Date()) {
+    const start = at(dayDate, slot.start);
+    const end = at(dayDate, slot.end);
+    if (now >= end) {
+      return { label: 'Ya pasó', icon: CHECK_ICON, title: 'Clase terminada' };
+    }
+    if (now >= start) {
+      const left = Math.ceil((end - now) / 60000);
+      return { label: `${left} min`, icon: CLOCK_ICON, title: `Quedan ${left} min` };
+    }
+    const until = Math.ceil((start - now) / 60000);
+    return { label: formatUntil(until), icon: CLOCK_ICON, title: `Empieza ${formatUntil(until).toLowerCase()}` };
+  }
+
+  function createTimePill(slot, isNow, dayDate) {
     const pill = document.createElement('div');
     pill.className = 'time-pill' + (isNow ? ' is-now' : '');
     pill.style.gridRow = String(slotRow(slot.id));
@@ -68,27 +101,28 @@
     end.textContent = formatTime(slot.end);
     times.append(start, dash, end);
 
-    // Al pasar el ratón: duración del tramo o, si está en curso, lo que queda.
-    const duration = document.createElement('span');
-    duration.className = 'time-pill__duration';
-    duration.setAttribute('aria-hidden', 'true');
-    const minutes = document.createElement('span');
-    minutes.className = 'time-pill__minutes';
-    duration.append(minutes);
-    duration.insertAdjacentHTML('beforeend', CLOCK_ICON);
+    // Al pasar el ratón: estado en vivo (texto arriba, icono abajo). Se
+    // recalcula en cada hover para que no se quede desfasado.
+    const status = document.createElement('span');
+    status.className = 'time-pill__status';
+    status.setAttribute('aria-hidden', 'true');
+    const label = document.createElement('span');
+    label.className = 'time-pill__label';
+    const icon = document.createElement('span');
+    icon.className = 'time-pill__icon';
+    status.append(label, icon);
 
-    const updateMinutes = () => {
-      const now = new Date();
-      const nowMin = now.getHours() * 60 + now.getMinutes();
-      const running = isNow && nowMin >= toMinutes(slot.start) && nowMin < toMinutes(slot.end);
-      const value = running ? toMinutes(slot.end) - nowMin : slotMinutes(slot);
-      minutes.textContent = `${value} min`;
-      pill.title = running ? `Quedan ${value} min` : `Duración: ${value} min`;
+    const updateStatus = () => {
+      const state = slotStatus(slot, dayDate);
+      label.textContent = state.label;
+      label.classList.toggle('is-long', state.label.length > 7);
+      icon.innerHTML = state.icon;
+      pill.title = state.title;
     };
-    updateMinutes();
-    pill.addEventListener('mouseenter', updateMinutes);
+    updateStatus();
+    pill.addEventListener('mouseenter', updateStatus);
 
-    pill.append(times, duration);
+    pill.append(times, status);
     return pill;
   }
 
@@ -147,8 +181,9 @@
     grid.style.gridTemplateRows = rows.join(' ');
 
     const nowSlot = dayIndex === todayIndex() && isWeekday() ? currentSlotId() : null;
+    const dayDate = weekDates()[dayIndex];
     const fragment = document.createDocumentFragment();
-    slots.forEach(slot => fragment.append(createTimePill(slot, slot.id === nowSlot)));
+    slots.forEach(slot => fragment.append(createTimePill(slot, slot.id === nowSlot, dayDate)));
     blocks.forEach(block => fragment.append(createSubjectBlock(block)));
     grid.replaceChildren(fragment);
   }

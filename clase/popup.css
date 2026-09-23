@@ -3,6 +3,7 @@
 :root {
   --font: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --ease: cubic-bezier(0.25, 0.8, 0.25, 1);
+  --t-hover: 0.5s; /* hovers estándar */
   --radius-app: 24px;
   --row-h: 46px;
   --break-h: 18px;
@@ -158,7 +159,7 @@ button:focus-visible {
   border: 1px solid var(--glass-border);
   box-shadow: 0 10px 30px var(--shadow);
   backdrop-filter: blur(18px);
-  transition: transform 0.2s var(--ease), background 0.2s var(--ease);
+  transition: transform var(--t-hover) var(--ease), background var(--t-hover) var(--ease);
 }
 
 .menu-button:not(:disabled):hover  { background: var(--glass-hover); }
@@ -238,7 +239,7 @@ button:focus-visible {
   color: var(--icon);
   border-radius: 15px;
   background: var(--control);
-  transition: background 0.2s var(--ease), transform 0.2s var(--ease);
+  transition: background var(--t-hover) var(--ease), transform var(--t-hover) var(--ease);
 }
 
 .toolbar-button--icon {
@@ -270,7 +271,7 @@ button:focus-visible {
   padding: 0 12px;
   color: var(--icon);
   border-radius: 14px;
-  transition: background 0.2s var(--ease), transform 0.2s var(--ease);
+  transition: background var(--t-hover) var(--ease), transform var(--t-hover) var(--ease);
 }
 
 .day-nav--prev { justify-self: start; }
@@ -321,7 +322,7 @@ button:focus-visible {
 
 .day-grid {
   display: grid;
-  grid-template-columns: 62px 1fr;
+  grid-template-columns: 64px 1fr;
   column-gap: 12px;
   row-gap: var(--gap);
   align-content: start;
@@ -358,14 +359,14 @@ button:focus-visible {
 }
 
 .time-pill__times,
-.time-pill__duration {
+.time-pill__status {
   position: absolute;
   inset: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  transition: opacity 0.25s var(--ease), transform 0.3s var(--ease);
+  transition: opacity var(--t-hover) var(--ease), transform var(--t-hover) var(--ease);
 }
 
 .time-pill__dash {
@@ -376,20 +377,28 @@ button:focus-visible {
   background: currentColor;
 }
 
-.time-pill__duration {
-  gap: 3px;
+.time-pill__status {
+  gap: 4px;
   opacity: 0;
   transform: translateY(8px) scale(0.92);
 }
 
-.time-pill__minutes { white-space: nowrap; }
+.time-pill__label {
+  font-size: 12px;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+.time-pill__label.is-long { font-size: 11px; }
+
+.time-pill__icon { display: flex; }
 
 .time-pill:hover .time-pill__times {
   opacity: 0;
   transform: translateY(-8px) scale(0.92);
 }
 
-.time-pill:hover .time-pill__duration {
+.time-pill:hover .time-pill__status {
   opacity: 1;
   transform: none;
 }
@@ -418,7 +427,7 @@ button:focus-visible {
     0 8px 20px var(--shadow);
   overflow: hidden;
   cursor: default;
-  transition: transform 0.25s var(--ease), box-shadow 0.25s var(--ease);
+  transition: transform var(--t-hover) var(--ease), box-shadow var(--t-hover) var(--ease);
 }
 
 .subject-block::after {
@@ -429,7 +438,7 @@ button:focus-visible {
   background: rgba(255, 255, 255, 0.1);
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.25s var(--ease);
+  transition: opacity var(--t-hover) var(--ease);
 }
 
 .subject-block:hover {

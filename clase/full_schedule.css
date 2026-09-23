@@ -3,6 +3,8 @@
 :root {
   --font: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --ease: cubic-bezier(0.25, 0.8, 0.25, 1);
+  --t-hover: 0.5s;   /* hovers estándar */
+  --t-expand: 0.75s; /* expansiones (día, leyenda) */
   --row-h: 64px;
   --break-h: 30px;
   --gap: 10px;
@@ -24,6 +26,7 @@ body {
   --empty-bg: rgba(0, 0, 0, 0.025);
   --empty-border: rgba(0, 0, 0, 0.09);
   --shadow: rgba(20, 24, 40, 0.12);
+  --card-bg: rgba(255, 255, 255, 0.94);
   --accent: #0a84ff;
 }
 
@@ -43,6 +46,7 @@ body.dark-theme {
   --empty-bg: rgba(255, 255, 255, 0.03);
   --empty-border: rgba(255, 255, 255, 0.1);
   --shadow: rgba(0, 0, 0, 0.45);
+  --card-bg: rgba(44, 44, 48, 0.94);
 }
 
 * { box-sizing: border-box; }
@@ -121,7 +125,7 @@ body {
   background: var(--pill-bg);
   box-shadow: 0 6px 16px var(--shadow);
   cursor: default;
-  transition: padding 0.3s var(--ease), box-shadow 0.3s var(--ease);
+  transition: padding var(--t-expand) var(--ease), box-shadow var(--t-expand) var(--ease);
 }
 
 .day-head__num {
@@ -134,7 +138,7 @@ body {
   opacity: 0;
   font-variant-numeric: tabular-nums;
   text-shadow: 0 0 8px rgba(255, 255, 255, 0.55);
-  transition: max-width 0.35s var(--ease), margin-left 0.35s var(--ease), opacity 0.25s var(--ease);
+  transition: max-width var(--t-expand) var(--ease), margin-left var(--t-expand) var(--ease), opacity var(--t-expand) var(--ease);
 }
 
 .day-head:hover .day-head__pill {
@@ -227,7 +231,7 @@ body {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.35),
     0 8px 22px var(--shadow);
-  transition: transform 0.25s var(--ease), box-shadow 0.25s var(--ease);
+  transition: transform var(--t-hover) var(--ease), box-shadow var(--t-hover) var(--ease);
 }
 
 .subject-block::after {
@@ -238,7 +242,7 @@ body {
   background: rgba(255, 255, 255, 0.1);
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.25s var(--ease);
+  transition: opacity var(--t-hover) var(--ease);
 }
 
 .subject-block:hover {
@@ -264,9 +268,17 @@ body {
   opacity: 0.72;
 }
 
-/* ---------- Leyenda (hover: tarjeta con detalles) ---------- */
+/* ---------- Leyenda (hover: tarjeta con detalles) ----------
+ * Cada elemento reserva en el flujo el tamaño de la pastilla (.legend-sizer,
+ * invisible) y la tarjeta visible va en position: absolute encima. Al
+ * expandirse flota sobre lo de abajo sin empujar el documento.
+ */
 
-.legend { margin-top: 32px; }
+.legend {
+  margin-top: 32px;
+  /* Hueco para que las tarjetas de la última fila no alarguen la página. */
+  padding-bottom: 150px;
+}
 
 .legend-title {
   margin: 0 0 14px;
@@ -285,22 +297,42 @@ body {
 }
 
 .legend-item {
-  display: flex;
-  flex-direction: column;
-  max-width: 360px;
-  padding: 8px 14px 8px 10px;
+  position: relative;
   font-size: 13px;
   font-weight: 600;
-  border-radius: 20px;
-  background: var(--glass);
-  border: 1px solid var(--glass-border);
   cursor: default;
-  transition:
-    padding 0.35s var(--ease),
-    border-radius 0.35s var(--ease),
-    box-shadow 0.35s var(--ease),
-    background 0.35s var(--ease);
+  outline: none;
 }
+
+.legend-item:hover,
+.legend-item:focus-visible { z-index: 2; }
+
+.legend-sizer,
+.legend-card {
+  padding: 8px 14px 8px 10px;
+  border: 1px solid transparent;
+}
+
+.legend-sizer { visibility: hidden; }
+
+.legend-card {
+  position: absolute;
+  top: 0;
+  left: 0;
+  min-width: 100%;
+  display: flex;
+  flex-direction: column;
+  border-radius: 20px;
+  border-color: var(--glass-border);
+  background: var(--glass);
+  transition:
+    padding var(--t-expand) var(--ease),
+    border-radius var(--t-expand) var(--ease),
+    box-shadow var(--t-expand) var(--ease),
+    background var(--t-expand) var(--ease);
+}
+
+.legend-item:focus-visible .legend-card { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .legend-head {
   display: flex;
@@ -318,7 +350,7 @@ body {
 
 .legend-name {
   white-space: nowrap;
-  transition: font-size 0.3s var(--ease);
+  transition: font-size var(--t-expand) var(--ease);
 }
 
 .legend-code {
@@ -330,7 +362,7 @@ body {
 .legend-head .legend-code {
   max-width: 8em;
   overflow: hidden;
-  transition: max-width 0.3s var(--ease), opacity 0.2s var(--ease);
+  transition: max-width var(--t-expand) var(--ease), opacity var(--t-hover) var(--ease);
 }
 
 .legend-details {
@@ -343,10 +375,10 @@ body {
   overflow: hidden;
   opacity: 0;
   transition:
-    max-height 0.35s var(--ease),
-    max-width 0.35s var(--ease),
-    margin-top 0.35s var(--ease),
-    opacity 0.25s var(--ease);
+    max-height var(--t-expand) var(--ease),
+    max-width var(--t-expand) var(--ease),
+    margin-top var(--t-expand) var(--ease),
+    opacity var(--t-expand) var(--ease);
 }
 
 .legend-teacher {
@@ -360,21 +392,23 @@ body {
   font-size: 12px;
   font-weight: 600;
   line-height: 1.5;
+  white-space: nowrap;
 }
 
-.legend-item:hover,
-.legend-item:focus-visible {
+.legend-item:hover .legend-card,
+.legend-item:focus-visible .legend-card {
   padding: 12px 18px 14px 14px;
   border-radius: 18px;
-  background: var(--glass);
-  box-shadow: 0 14px 30px var(--shadow);
+  background: var(--card-bg);
+  box-shadow: 0 18px 40px var(--shadow);
+  backdrop-filter: blur(20px);
 }
 
-.legend-item:hover .legend-name,
-.legend-item:focus-visible .legend-name { font-size: 15px; }
+.legend-item:hover .legend-card .legend-name,
+.legend-item:focus-visible .legend-card .legend-name { font-size: 15px; }
 
-.legend-item:hover .legend-head .legend-code,
-.legend-item:focus-visible .legend-head .legend-code {
+.legend-item:hover .legend-card .legend-head .legend-code,
+.legend-item:focus-visible .legend-card .legend-head .legend-code {
   max-width: 0;
   opacity: 0;
 }
@@ -382,7 +416,7 @@ body {
 .legend-item:hover .legend-details,
 .legend-item:focus-visible .legend-details {
   max-height: 120px;
-  max-width: 320px;
+  max-width: 340px;
   margin-top: 4px;
   opacity: 1;
 }
