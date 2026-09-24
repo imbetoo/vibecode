@@ -117,13 +117,6 @@ button:focus-visible {
 .app.is-schedule .view--schedule,
 .app.is-tasks .view--tasks { transform: translateX(0); opacity: 1; }
 
-@media (prefers-reduced-motion: reduce) {
-  .view, .day-grid, .time-pill *, .subject-block {
-    transition: none !important;
-    animation: none !important;
-  }
-}
-
 /* ---------- Vista 1: menú ---------- */
 
 .view--menu {
