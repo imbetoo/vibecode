@@ -37,26 +37,52 @@
   function updateIPECountdown() {
     const text = ipeCountdownText();
     if (ipeText.textContent !== text) ipeText.textContent = text; // solo el texto, y solo si cambia
-    applyIpeDone(); // el viernes a las 00:00 la casilla se desmarca sola
+    applyIpeDone(); // el jueves a las 20:00 la casilla caduca y se desmarca sola
   }
 
   // ---------- Casilla "IPE entregada" ----------
-  // Se guarda en chrome.storage.sync la apertura (viernes 00:00) de la tarea
-  // que se marcó. Así la marca vale solo para esa semana: con la tarea nueva
-  // deja de coincidir y la tarjeta vuelve a su sitio sin tocar nada.
+  // En chrome.storage.sync se guarda la entrega (jueves 20:00) de la tarea
+  // marcada. Al pasar esa hora la marca caduca: se borra y la tarjeta vuelve
+  // a su sitio. Entre el jueves 20:00 y el viernes 00:00 no hay tarea.
 
-  const IPE_DONE_KEY = 'ipeCompleted';
   const ipeCard = document.getElementById('ipe-card');
   const ipeCheck = document.getElementById('ipe-check');
+  const menuButtons = ipeCard.parentElement;
   let ipeDoneFor = '';
 
-  const currentIpeWeek = () => lastIpeOpening().toISOString();
+  /**
+   * Reordena el menú con FLIP: mide dónde está cada tarjeta, cambia el
+   * orden y las anima (solo transform, en la GPU) desde su sitio anterior.
+   */
+  function reorderMenu(change) {
+    const cards = [...menuButtons.children];
+    const before = cards.map(card => card.getBoundingClientRect().top);
+    change();
+    const ease = getComputedStyle(document.documentElement).getPropertyValue('--ease').trim();
+    cards.forEach((card, i) => {
+      const dy = before[i] - card.getBoundingClientRect().top;
+      if (!dy) return;
+      card.animate(
+        [{ transform: `translateY(${dy}px)` }, { transform: 'none' }],
+        { duration: 600, easing: ease }
+      );
+    });
+  }
 
-  /** Solo alterna una clase y `checked`, y solo si cambian. */
-  function applyIpeDone() {
-    const done = ipeDoneFor === currentIpeWeek();
+  /** Solo alterna clases, `checked` y `disabled`, y solo si cambian. */
+  function applyIpeDone({ animate = true } = {}) {
+    if (ipeDoneExpired(ipeDoneFor)) {
+      ipeDoneFor = '';
+      chrome.storage.sync.remove(IPE_DONE_KEY).catch(() => {});
+    }
+    const deadline = ipeCurrentDeadline();
+    const done = Boolean(deadline) && ipeDoneFor === deadline;
     if (ipeCheck.checked !== done) ipeCheck.checked = done;
-    ipeCard.classList.toggle('is-checked', done);
+    if (ipeCheck.disabled !== !deadline) ipeCheck.disabled = !deadline;
+    if (ipeCard.classList.contains('is-checked') === done) return;
+    const toggle = () => ipeCard.classList.toggle('is-checked', done);
+    if (animate && currentView() === 'menu') reorderMenu(toggle);
+    else toggle();
   }
 
   async function loadIpeDone() {
@@ -66,11 +92,11 @@
     } catch {
       ipeDoneFor = ''; // fuera de la extensión no hay chrome.storage
     }
-    applyIpeDone();
+    applyIpeDone({ animate: false });
   }
 
   ipeCheck.addEventListener('change', () => {
-    ipeDoneFor = ipeCheck.checked ? currentIpeWeek() : '';
+    ipeDoneFor = ipeCheck.checked ? ipeCurrentDeadline() || '' : '';
     applyIpeDone();
     chrome.storage.sync.set({ [IPE_DONE_KEY]: ipeDoneFor }).catch(() => {});
   });
@@ -340,7 +366,6 @@
 
   // ---------- Tareas del Aula Virtual (calendario .ics de Moodle) ----------
 
-  const ICS_KEY = 'icsUrl';
   const tasksSetup = document.getElementById('tasks-setup');
   const tasksList = document.getElementById('tasks-list');
   const tasksStatus = document.getElementById('tasks-status');
@@ -348,11 +373,6 @@
   const icsInput = document.getElementById('ics-url');
   const icsCancel = document.getElementById('ics-cancel');
   const icsClear = document.getElementById('ics-clear');
-
-  async function getIcsUrl() {
-    const { [ICS_KEY]: url } = await chrome.storage.local.get(ICS_KEY);
-    return url || '';
-  }
 
   /** Acepta http(s) y webcal (Moodle a veces da webcal://, que es https). */
   function normalizeIcsUrl(value) {
@@ -385,14 +405,8 @@
 
   // Tareas marcadas como hechas: UIDs del .ics en chrome.storage.sync, para
   // que se compartan entre los ordenadores con la misma cuenta de Chrome.
-  const DONE_KEY = 'completedTasks';
   let completed = new Set();
   let loadedAt = '';
-
-  async function readCompleted() {
-    const { [DONE_KEY]: list } = await chrome.storage.sync.get(DONE_KEY);
-    return new Set(Array.isArray(list) ? list : []);
-  }
 
   async function saveCompleted() {
     try {
@@ -417,23 +431,6 @@
     updateTasksCount();
   }
 
-  /** Parsea el .ics en un Web Worker para no bloquear el hilo principal. */
-  function parseInWorker(text) {
-    return new Promise((resolve, reject) => {
-      const worker = new Worker('ics-worker.js');
-      worker.onmessage = ({ data }) => {
-        worker.terminate();
-        if (data.error) reject(new Error(data.error));
-        else resolve(data);
-      };
-      worker.onerror = event => {
-        worker.terminate();
-        reject(new Error(event.message || 'error al leer el calendario'));
-      };
-      worker.postMessage({ text, now: Date.now() });
-    });
-  }
-
   let loadSeq = 0;
 
   async function loadTasks() {
@@ -450,11 +447,8 @@
 
     let parsed, done;
     try {
-      const response = await fetch(url, { cache: 'no-store' });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const text = await response.text();
-      if (!text.includes('BEGIN:VCALENDAR')) throw new Error('el enlace no devuelve un calendario .ics');
-      [parsed, done] = await Promise.all([parseInWorker(text), readCompleted()]);
+      parsed = await fetchCalendar(url);
+      done = parsed.done;
     } catch (error) {
       if (seq === loadSeq) setTasksStatus(`No se pudo cargar (${error.message})`, true);
       return;

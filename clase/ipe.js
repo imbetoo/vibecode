@@ -48,3 +48,18 @@ function ipeCountdownText(now = new Date()) {
   const m = totalMin % 60;
   return `Faltan ${d}d ${h}h ${m}m`;
 }
+
+// ---------- Casilla "IPE entregada" (chrome.storage.sync) ----------
+// Se guarda la fecha de entrega (ISO) de la tarea marcada como hecha.
+const IPE_DONE_KEY = 'ipeCompleted';
+
+/** Entrega (ISO) de la tarea abierta ahora, o null entre jueves 20:00 y viernes 00:00. */
+function ipeCurrentDeadline(now = new Date()) {
+  const status = ipeStatus(now);
+  return status.waiting ? null : status.deadline.toISOString();
+}
+
+/** La marca guardada ya no vale: su entrega pasó (o es de una versión antigua). */
+function ipeDoneExpired(value, now = new Date()) {
+  return Boolean(value) && value !== ipeCurrentDeadline(now);
+}

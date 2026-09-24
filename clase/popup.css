@@ -181,7 +181,7 @@ button:focus-visible {
 /* Orden visual: al marcar la IPE como entregada, baja por debajo de Tareas. */
 .menu-button--schedule { order: 1; }
 .menu-button--ipe      { order: 2; }
-.menu-button--tasks    { order: 3; }
+.menu-button--tasks    { order: 3; z-index: 1; } /* la IPE pasa por detrás al cruzarse */
 .menu-button--ipe.is-checked { order: 4; }
 .menu-button--soon     { order: 5; }
 

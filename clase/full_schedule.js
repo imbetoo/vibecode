@@ -67,35 +67,61 @@
     add(pill, row(slot.id), null, 1);
   });
 
-  // Recreo
+  // Recreo, con lupa: una copia ampliada del texto dentro de una máscara
+  // circular que sigue al ratón (ver setupMagnifier).
   if (slots.length > BREAK.afterSlot) {
-    const breakRow = div('break-row', `Recreo · ${formatTime(BREAK.start)} – ${formatTime(BREAK.end)}`);
+    const text = `Recreo · ${formatTime(BREAK.start)} – ${formatTime(BREAK.end)}`;
+    const breakRow = div('break-row js-mag-container');
+    const base = document.createElement('span');
+    base.className = 'mag-base';
+    base.textContent = text;
+    const lens = div('mag-lens js-mag-lens');
+    lens.setAttribute('aria-hidden', 'true');
+    const content = document.createElement('span');
+    content.className = 'mag-content js-mag-content';
+    content.textContent = text;
+    lens.append(content);
+    breakRow.append(base, lens);
     add(breakRow, BREAK.afterSlot + 1 + HEADER_ROWS);
+    setupMagnifier(breakRow, lens, content);
   }
 
-  // Bloques de asignaturas y huecos libres
+  // Bloques de asignaturas y huecos libres. Se guardan los contadores de
+  // tareas de cada asignatura y los huecos del final de cada día, para
+  // rellenarlos cuando llegue el calendario de Moodle (sin reconstruir nada).
+  const taskCounters = [];            // { code, el }
+  const trailingCells = WEEK.map(() => []);
+
   WEEK.forEach((day, i) => {
     const col = dayColumn(i);
     const covered = new Set();
+    const lastClass = Math.max(0, ...Object.keys(day.classes).map(Number));
 
     groupDay(day).forEach(block => {
       const subject = SUBJECTS[block.code] || { name: block.code, color: '#8e8e93' };
       const el = div('subject-block');
       el.style.background = subject.color;
       el.style.color = textColorFor(subject.color);
+      el.classList.toggle('is-light', luminanceOf(subject.color) > 0.35);
 
       const first = TIME_SLOTS.find(s => s.id === block.from);
       const last = TIME_SLOTS.find(s => s.id === block.to);
       el.title = `${subject.name} · ${formatTime(first.start)} – ${formatTime(last.end)}`;
       el.append(div('subject-block__name', subject.name));
       el.append(div('subject-block__meta', `${block.code} · ${formatTime(first.start)}–${formatTime(last.end)}`));
+      const counter = div('subject-block__tasks');
+      counter.hidden = true;
+      el.append(counter);
+      taskCounters.push({ code: block.code, el: counter });
 
       add(el, row(block.from), row(block.to) + 1, col);
       for (let id = block.from; id <= block.to; id++) covered.add(id);
     });
 
     slots.forEach(slot => {
-      if (!covered.has(slot.id)) add(div('empty-cell'), row(slot.id), null, col);
+      if (covered.has(slot.id)) return;
+      const cell = add(div('empty-cell'), row(slot.id), null, col);
+      if (slot.id > lastClass) trailingCells[i].push(cell);
     });
   });
 
@@ -150,4 +176,195 @@
     item.append(sizer, card);
     legend.append(item);
   });
+
+  // ---------- Lupa del recreo (solo transform, en la GPU) ----------
+  // La lente se desplaza (x, y) hasta el ratón y su contenido lo contrario,
+  // así el texto ampliado queda alineado con el de debajo. El scale va
+  // primero para que el punto ampliado sea justo el que está bajo el cursor.
+  function setupMagnifier(container, lens, content) {
+    const SCALE = 1.35;
+    let pointer = null;
+    let frame = 0;
+
+    const paint = () => {
+      frame = 0;
+      const rect = container.getBoundingClientRect();
+      const x = pointer.x - rect.left - rect.width / 2;
+      const y = pointer.y - rect.top - rect.height / 2;
+      lens.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+      content.style.transform = `scale(${SCALE}) translate3d(${-x}px, ${-y}px, 0)`;
+    };
+
+    container.addEventListener('mousemove', event => {
+      pointer = { x: event.clientX, y: event.clientY };
+      if (!frame) frame = requestAnimationFrame(paint);
+    });
+  }
+
+  // ---------- Tareas del Aula Virtual ----------
+
+  const norm = text => text.toLowerCase().replace(/[^a-z0-9]/g, '');
+  // Códigos más largos primero, para que uno corto no gane a otro que lo contiene.
+  const CODES = Object.keys(SUBJECTS)
+    .map(code => [code, norm(code)])
+    .sort((a, b) => b[1].length - a[1].length);
+
+  /** Asignatura de un evento de Moodle según su categoría (curso) o su título. */
+  function subjectOf(event) {
+    const haystack = norm(`${event.category} ${event.summary}`);
+    const match = CODES.find(([, key]) => haystack.includes(key));
+    return match ? match[0] : null;
+  }
+
+  const sameDay = (a, b) =>
+    a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+
+  const timeText = event => event.allDay
+    ? 'Todo el día'
+    : event.start.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+
+  /** Actualiza texto y visibilidad de un elemento solo si cambian. */
+  function setText(el, text) {
+    if (el.textContent !== text) el.textContent = text;
+  }
+
+  /** Mete (o quita) una tarea en un hueco libre; el bloque se crea una sola vez. */
+  function setSlotTask(cell, title, meta, tooltip) {
+    let slot = cell.querySelector('.task-in-slot');
+    if (!title) {
+      if (slot) slot.hidden = true;
+      cell.classList.remove('has-task');
+      return;
+    }
+    if (!slot) {
+      slot = div('task-in-slot');
+      const body = div('task-in-slot__body');
+      body.append(div('task-in-slot__title'), div('task-in-slot__meta'));
+      const check = document.createElement('span');
+      check.className = 'task-in-slot__check';
+      check.setAttribute('aria-hidden', 'true');
+      slot.append(body, check);
+      cell.append(slot);
+    }
+    setText(slot.querySelector('.task-in-slot__title'), title);
+    setText(slot.querySelector('.task-in-slot__meta'), meta);
+    slot.title = tooltip;
+    slot.hidden = false;
+    cell.classList.add('has-task');
+  }
+
+  let upcoming = [];
+  let completed = new Set();
+
+  function applyTasks() {
+    const pending = upcoming.filter(event => !completed.has(event.uid));
+
+    // Contador amarillo de cada bloque: tareas pendientes de su asignatura.
+    const perSubject = {};
+    for (const event of pending) {
+      const code = subjectOf(event);
+      if (code) perSubject[code] = (perSubject[code] || 0) + 1;
+    }
+    for (const { code, el } of taskCounters) {
+      const n = perSubject[code] || 0;
+      setText(el, `${n} ${n === 1 ? 'tarea pendiente' : 'tareas pendientes'}`);
+      if (el.hidden !== !n) el.hidden = !n;
+    }
+
+    // Huecos del final de cada día: las tareas que vencen ese día.
+    WEEK.forEach((day, i) => {
+      const cells = trailingCells[i];
+      const due = pending.filter(event => sameDay(event.start, dates[i]));
+      cells.forEach((cell, k) => {
+        const event = due[k];
+        if (!event) return setSlotTask(cell, null);
+        const overflow = due.length - cells.length;
+        if (k === cells.length - 1 && overflow > 0) {
+          return setSlotTask(cell, `${overflow + 1} tareas más`, `${day.name} · desde ${timeText(event)}`,
+            due.slice(k).map(e => e.summary).join('\n'));
+        }
+        setSlotTask(cell, event.summary, `${day.name} ${timeText(event)}`,
+          `${event.summary}\n${event.start.toLocaleString('es-ES')}`);
+      });
+    });
+  }
+
+  async function loadTasks() {
+    try {
+      const url = await getIcsUrl();
+      if (!url) return;
+      const calendar = await fetchCalendar(url);
+      upcoming = calendar.upcoming;
+      completed = calendar.done;
+      applyTasks();
+    } catch {
+      // Sin enlace, sin red o fuera de la extensión: el horario sigue sin tareas.
+    }
+  }
+
+  // Si se marca una tarea en el popup (o en otro ordenador), se refleja aquí.
+  globalThis.chrome?.storage?.onChanged.addListener((changes, area) => {
+    if (area === 'sync' && changes[DONE_KEY]) {
+      completed = new Set(changes[DONE_KEY].newValue || []);
+      applyTasks();
+    } else if (area === 'local' && changes[ICS_KEY]) {
+      upcoming = [];
+      applyTasks();
+      loadTasks();
+    }
+  });
+
+  loadTasks();
+
+  // ---------- Reloj y cuenta atrás hasta el fin de las clases ----------
+
+  const clock = document.getElementById('header-clock');
+  const countdown = document.getElementById('header-countdown');
+
+  /** Fin de las clases de un día: el final de su último tramo con clase. */
+  function classesEnd(day, date) {
+    const last = Math.max(...Object.keys(day.classes).map(Number));
+    return at(date, TIME_SLOTS.find(s => s.id === last).end);
+  }
+
+  function classesStart(day, date) {
+    const first = Math.min(...Object.keys(day.classes).map(Number));
+    return at(date, TIME_SLOTS.find(s => s.id === first).start);
+  }
+
+  function at(date, time) {
+    const [h, m] = time.split(':').map(Number);
+    return new Date(date.getFullYear(), date.getMonth(), date.getDate(), h, m);
+  }
+
+  /** "Quedan 1 hora y 46 minutos." / "Queda 1 minuto." */
+  function remainingText(minutes) {
+    const h = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    const parts = [];
+    if (h) parts.push(`${h} ${h === 1 ? 'hora' : 'horas'}`);
+    if (m) parts.push(`${m} ${m === 1 ? 'minuto' : 'minutos'}`);
+    const singular = parts.length === 1 && (h || m) === 1;
+    return `${singular ? 'Queda' : 'Quedan'} ${parts.join(' y ')}.`;
+  }
+
+  function countdownText(now) {
+    const d = now.getDay();
+    const day = WEEK[d - 1];
+    if (!day || !Object.keys(day.classes).length) return 'Hoy no hay clases.';
+    const start = classesStart(day, now);
+    const end = classesEnd(day, now);
+    if (now < start) return `Las clases empiezan a las ${start.getHours()}:${String(start.getMinutes()).padStart(2, '0')}.`;
+    if (now >= end) return 'Clases terminadas por hoy.';
+    return remainingText(Math.ceil((end - now) / 60000));
+  }
+
+  // Cada segundo, alineado al cambio de segundo; solo cambia textContent.
+  function tick() {
+    const now = new Date();
+    setText(clock, now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+    setText(countdown, countdownText(now));
+    setTimeout(tick, 1000 - (Date.now() % 1000));
+  }
+  tick();
 })();

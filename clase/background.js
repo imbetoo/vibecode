@@ -18,6 +18,12 @@ function startChecking() {
   chrome.alarms.create(ALARM, { when: nextMinute, periodInMinutes: 1 });
 }
 
+/** Al pasar el jueves 20:00, la tarea marcada como entregada se desmarca. */
+async function clearExpiredIpeDone() {
+  const { [IPE_DONE_KEY]: value } = await chrome.storage.sync.get(IPE_DONE_KEY);
+  if (ipeDoneExpired(value)) await chrome.storage.sync.remove(IPE_DONE_KEY);
+}
+
 async function checkIpeOpening() {
   const now = new Date();
   // Entre la entrega del jueves y la apertura del viernes no hay tarea abierta.
@@ -48,8 +54,11 @@ chrome.runtime.onInstalled.addListener(async ({ reason }) => {
 chrome.runtime.onStartup.addListener(() => {
   startChecking();
   checkIpeOpening();
+  clearExpiredIpeDone();
 });
 
 chrome.alarms.onAlarm.addListener(alarm => {
-  if (alarm.name === ALARM) checkIpeOpening();
+  if (alarm.name !== ALARM) return;
+  checkIpeOpening();
+  clearExpiredIpeDone();
 });

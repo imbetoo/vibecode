@@ -147,11 +147,12 @@ function weekDates(date = new Date()) {
 
 /**
  * Periodos de una asignatura que ya han terminado esta semana según WEEK.
- * En fin de semana cuenta como semana nueva (0).
+ * La semana se reinicia al acabar el viernes: sábado (6) y domingo (0)
+ * devuelven 0, así que las sesiones restantes vuelven a ser las totales.
  */
 function periodsDoneThisWeek(code, date = new Date()) {
   const d = date.getDay();
-  if (d === 0 || d === 6) return 0;
+  if (d === 0 || d === 6) return 0; // fin de semana: semana nueva
   const today = d - 1;
   const now = date.getHours() * 60 + date.getMinutes();
   let done = 0;
@@ -165,13 +166,17 @@ function periodsDoneThisWeek(code, date = new Date()) {
   return done;
 }
 
-/** Color de texto legible (oscuro o claro) sobre un fondo dado. */
-function textColorFor(hex) {
+/** Luminancia relativa (0–1) de un color "#rrggbb". */
+function luminanceOf(hex) {
   const n = parseInt(hex.slice(1), 16);
   const [r, g, b] = [n >> 16, (n >> 8) & 255, n & 255].map(v => {
     const c = v / 255;
     return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
   });
-  const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-  return luminance > 0.35 ? 'rgba(20, 20, 30, 0.88)' : 'rgba(255, 255, 255, 0.95)';
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+/** Color de texto legible (oscuro o claro) sobre un fondo dado. */
+function textColorFor(hex) {
+  return luminanceOf(hex) > 0.35 ? 'rgba(20, 20, 30, 0.88)' : 'rgba(255, 255, 255, 0.95)';
 }
