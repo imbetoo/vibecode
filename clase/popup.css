@@ -117,6 +117,9 @@ button:focus-visible {
 .app.is-schedule .view--schedule,
 .app.is-tasks .view--tasks { transform: translateX(0); opacity: 1; }
 
+/* Solo al reabrir el popup en la última vista: aparece ya colocada. */
+.app.is-restoring .view { transition: none; }
+
 /* ---------- Vista 1: menú ---------- */
 
 .view--menu {
@@ -169,8 +172,18 @@ button:focus-visible {
   background: var(--glass-strong);
   border: 1px solid var(--glass-border);
   box-shadow: 0 10px 30px var(--shadow);
-  transition: transform var(--t-hover) var(--ease), background var(--t-hover) var(--ease);
+  transition:
+    transform var(--t-hover) var(--ease),
+    background var(--t-hover) var(--ease),
+    opacity var(--t-hover) var(--ease);
 }
+
+/* Orden visual: al marcar la IPE como entregada, baja por debajo de Tareas. */
+.menu-button--schedule { order: 1; }
+.menu-button--ipe      { order: 2; }
+.menu-button--tasks    { order: 3; }
+.menu-button--ipe.is-checked { order: 4; }
+.menu-button--soon     { order: 5; }
 
 .menu-button:not(:disabled, .menu-button--card):hover  { background: var(--glass-hover); }
 .menu-button:not(:disabled, .menu-button--card):active { transform: scale(0.97); }
@@ -216,6 +229,37 @@ button:focus-visible {
 .menu-button__icon--tasks { background: #47ff94; }
 
 .menu-button__subtitle { font-variant-numeric: tabular-nums; }
+
+/* Reloj + casilla a la derecha de la tarjeta de IPE. */
+.menu-button__aside {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: none;
+}
+
+.ipe-clock {
+  display: block;
+  color: var(--icon);
+  transform-origin: 50% 50%;
+  animation: clock-swing 4s var(--ease) infinite;
+  will-change: transform;
+}
+
+/* Balanceo corto y suave cada 4 s; el resto del tiempo, quieto. */
+@keyframes clock-swing {
+  0%, 72%, 100% { transform: rotate(0); }
+  78% { transform: rotate(-10deg); }
+  84% { transform: rotate(8deg); }
+  90% { transform: rotate(-4deg); }
+  95% { transform: rotate(2deg); }
+}
+
+.menu-button--ipe.is-checked { opacity: 0.5; }
+.menu-button--ipe.is-checked .ipe-clock { animation-play-state: paused; }
+
+.menu-button--ipe.is-checked .menu-button__title,
+.menu-button--ipe.is-checked .menu-button__subtitle { text-decoration: line-through; }
 
 .menu-button--soon {
   cursor: default;
@@ -499,10 +543,35 @@ button:focus-visible {
   text-overflow: ellipsis;
 }
 
-.subject-block__code {
+/* Código y sesiones restantes comparten la misma celda (superpuestos): el
+   hover solo cruza sus opacidades, sin cambiar ningún tamaño. */
+.subject-block__foot {
+  display: grid;
+  min-width: 0;
+}
+
+.subject-block__code,
+.subject-block__remaining {
+  grid-area: 1 / 1;
+  min-width: 0;
   font-size: 11px;
   font-weight: 600;
-  opacity: 0.7;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: opacity var(--t-hover) var(--ease);
+  will-change: opacity;
+}
+
+.subject-block__code { opacity: 0.7; }
+.subject-block__remaining { opacity: 0; }
+
+.subject-block:hover .subject-block__code:not(:only-child) { opacity: 0; }
+.subject-block:hover .subject-block__remaining { opacity: 0.85; }
+
+.subject-block.is-single .subject-block__foot {
+  flex: none;
+  justify-items: end;
 }
 
 .subject-block:not(.is-single) .subject-block__name {

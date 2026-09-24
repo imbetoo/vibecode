@@ -37,7 +37,43 @@
   function updateIPECountdown() {
     const text = ipeCountdownText();
     if (ipeText.textContent !== text) ipeText.textContent = text; // solo el texto, y solo si cambia
+    applyIpeDone(); // el viernes a las 00:00 la casilla se desmarca sola
   }
+
+  // ---------- Casilla "IPE entregada" ----------
+  // Se guarda en chrome.storage.sync la apertura (viernes 00:00) de la tarea
+  // que se marcó. Así la marca vale solo para esa semana: con la tarea nueva
+  // deja de coincidir y la tarjeta vuelve a su sitio sin tocar nada.
+
+  const IPE_DONE_KEY = 'ipeCompleted';
+  const ipeCard = document.getElementById('ipe-card');
+  const ipeCheck = document.getElementById('ipe-check');
+  let ipeDoneFor = '';
+
+  const currentIpeWeek = () => lastIpeOpening().toISOString();
+
+  /** Solo alterna una clase y `checked`, y solo si cambian. */
+  function applyIpeDone() {
+    const done = ipeDoneFor === currentIpeWeek();
+    if (ipeCheck.checked !== done) ipeCheck.checked = done;
+    ipeCard.classList.toggle('is-checked', done);
+  }
+
+  async function loadIpeDone() {
+    try {
+      const { [IPE_DONE_KEY]: value } = await chrome.storage.sync.get(IPE_DONE_KEY);
+      ipeDoneFor = typeof value === 'string' ? value : '';
+    } catch {
+      ipeDoneFor = ''; // fuera de la extensión no hay chrome.storage
+    }
+    applyIpeDone();
+  }
+
+  ipeCheck.addEventListener('change', () => {
+    ipeDoneFor = ipeCheck.checked ? currentIpeWeek() : '';
+    applyIpeDone();
+    chrome.storage.sync.set({ [IPE_DONE_KEY]: ipeDoneFor }).catch(() => {});
+  });
 
   // Cada minuto, arrancando en el cambio de minuto para no ir desfasado.
   function startIPECountdown() {
@@ -52,12 +88,35 @@
   // ---------- Navegación entre vistas ----------
 
   const VIEWS = { menu: menuView, schedule: scheduleView, tasks: tasksView };
+  const VIEW_KEY = 'clase-last-view';
 
   /** Muestra una vista; las demás quedan inertes (sin foco ni clics). */
   function showView(name) {
     app.classList.toggle('is-schedule', name === 'schedule');
     app.classList.toggle('is-tasks', name === 'tasks');
     for (const [key, view] of Object.entries(VIEWS)) view.inert = key !== name;
+    try {
+      localStorage.setItem(VIEW_KEY, name); // al reabrir el popup se vuelve aquí
+    } catch {
+      // Sin almacenamiento, el popup abre siempre en el menú.
+    }
+  }
+
+  /**
+   * Abre el popup en la última vista usada. Se coloca sin el deslizamiento
+   * de entrada: la vista ya está en su sitio cuando se pinta el popup.
+   */
+  function restoreLastView() {
+    let saved = 'menu';
+    try {
+      saved = localStorage.getItem(VIEW_KEY) || 'menu';
+    } catch {}
+    if (saved !== 'schedule' && saved !== 'tasks') return;
+    app.classList.add('is-restoring');
+    if (saved === 'schedule') showSchedule();
+    else showTasks();
+    void app.offsetWidth; // aplica la posición final antes de reactivar las transiciones
+    app.classList.remove('is-restoring');
   }
 
   function currentView() {
@@ -166,7 +225,22 @@
     return pill;
   }
 
-  function createSubjectBlock(block) {
+  /** "7 sesiones semanales restantes" (en bloques de un tramo, "7 restantes"). */
+  function remainingText(count, short) {
+    if (short) return `${count} ${count === 1 ? 'restante' : 'restantes'}`;
+    return count === 1 ? '1 sesión semanal restante' : `${count} sesiones semanales restantes`;
+  }
+
+  /**
+   * Sesiones de la asignatura que quedan esta semana. Para un día futuro se
+   * cuentan desde el inicio de ese día; para hoy o uno pasado, desde ahora.
+   */
+  function remainingSessions(code, dayDate) {
+    const ref = new Date(Math.max(Date.now(), dayDate.getTime()));
+    return Math.max(0, SUBJECTS[code].periods - periodsDoneThisWeek(code, ref));
+  }
+
+  function createSubjectBlock(block, dayDate) {
     const subject = SUBJECTS[block.code] || { name: block.code, color: '#8e8e93' };
     const el = document.createElement('div');
     el.className = 'subject-block' + (block.from === block.to ? ' is-single' : '');
@@ -177,11 +251,30 @@
     const name = document.createElement('span');
     name.className = 'subject-block__name';
     name.textContent = subject.name;
+    const foot = document.createElement('span');
+    foot.className = 'subject-block__foot';
     const code = document.createElement('span');
     code.className = 'subject-block__code';
     code.textContent = block.code;
+    foot.append(code);
 
-    el.append(name, code);
+    // Hover: el código se funde con las sesiones restantes (misma celda).
+    if (SUBJECTS[block.code]?.periods) {
+      const short = block.from === block.to;
+      const remaining = document.createElement('span');
+      remaining.className = 'subject-block__remaining';
+      remaining.setAttribute('aria-hidden', 'true');
+      // Se recalcula al entrar el ratón; solo cambia el texto si hace falta.
+      const updateRemaining = () => {
+        const text = remainingText(remainingSessions(block.code, dayDate), short);
+        if (remaining.textContent !== text) remaining.textContent = text;
+      };
+      updateRemaining();
+      el.addEventListener('mouseenter', updateRemaining);
+      foot.append(remaining);
+    }
+
+    el.append(name, foot);
     return el;
   }
 
@@ -224,7 +317,7 @@
     const dayDate = weekDates()[dayIndex];
     const fragment = document.createDocumentFragment();
     slots.forEach(slot => fragment.append(createTimePill(slot, slot.id === nowSlot, dayDate)));
-    blocks.forEach(block => fragment.append(createSubjectBlock(block)));
+    blocks.forEach(block => fragment.append(createSubjectBlock(block, dayDate)));
     grid.replaceChildren(fragment);
   }
 
@@ -453,9 +546,15 @@
   // Si se marca una tarea en otro ordenador, se refleja aquí sin recargar.
   // (Fuera de la extensión, p. ej. abriendo popup.html a mano, no hay chrome.storage.)
   globalThis.chrome?.storage?.onChanged.addListener((changes, area) => {
-    if (area !== 'sync' || !changes[DONE_KEY]) return;
-    completed = new Set(changes[DONE_KEY].newValue || []);
-    applyCompleted();
+    if (area !== 'sync') return;
+    if (changes[IPE_DONE_KEY]) {
+      ipeDoneFor = changes[IPE_DONE_KEY].newValue || '';
+      applyIpeDone();
+    }
+    if (changes[DONE_KEY]) {
+      completed = new Set(changes[DONE_KEY].newValue || []);
+      applyCompleted();
+    }
   });
 
   tasksSetup.addEventListener('submit', async event => {
@@ -522,6 +621,8 @@
     }
   });
 
-  renderMenu();
+  renderMenu(); // el menú se pinta siempre: es a donde vuelve "‹ Menú"
   startIPECountdown();
+  loadIpeDone();
+  restoreLastView();
 })();

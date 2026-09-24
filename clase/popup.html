@@ -25,7 +25,7 @@
       </header>
 
       <div class="menu-buttons">
-        <button id="open-schedule" class="menu-button" type="button">
+        <button id="open-schedule" class="menu-button menu-button--schedule" type="button">
           <span class="menu-button__icon" aria-hidden="true">
             <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <rect x="3" y="4.5" width="18" height="16.5" rx="4"/>
@@ -41,7 +41,7 @@
           </span>
         </button>
 
-        <div class="menu-button menu-button--card">
+        <div id="ipe-card" class="menu-button menu-button--card menu-button--ipe">
           <span class="menu-button__icon menu-button__icon--ipe" aria-hidden="true">
             <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M6.5 3h11M6.5 21h11"/>
@@ -53,9 +53,19 @@
             <span class="menu-button__title">Entrega IPE</span>
             <span id="ipe-countdown-text" class="menu-button__subtitle"></span>
           </span>
+          <span class="menu-button__aside">
+            <svg class="ipe-clock" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+              <mask id="ipe-clock-hands">
+                <circle cx="12" cy="12" r="11" fill="#fff"/>
+                <path d="M12 6.5V12l3.5 2.5" fill="none" stroke="#000" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+              </mask>
+              <circle cx="12" cy="12" r="11" fill="currentColor" mask="url(#ipe-clock-hands)"/>
+            </svg>
+            <input id="ipe-check" class="task__check" type="checkbox" aria-label="Marcar la tarea de IPE de esta semana como entregada" title="Marcar como entregada">
+          </span>
         </div>
 
-        <button id="open-tasks" class="menu-button" type="button">
+        <button id="open-tasks" class="menu-button menu-button--tasks" type="button">
           <span class="menu-button__icon menu-button__icon--tasks" aria-hidden="true">
             <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <rect x="4" y="3.5" width="16" height="17.5" rx="3.5"/>
@@ -64,7 +74,7 @@
           </span>
           <span class="menu-button__text">
             <span class="menu-button__title">Tareas Aula Virtual</span>
-            <span class="menu-button__subtitle">Entregas de Moodle</span>
+            <span class="menu-button__subtitle">Entregas del AV</span>
           </span>
           <span class="menu-button__chevron" aria-hidden="true">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>
