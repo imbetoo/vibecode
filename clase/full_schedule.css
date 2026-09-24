@@ -231,23 +231,38 @@ body {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.35),
     0 8px 22px var(--shadow);
-  transition: transform var(--t-hover) var(--ease), box-shadow var(--t-hover) var(--ease);
+  /* Solo transform y opacity se animan: van en la GPU, sin repintar. */
+  transition: transform var(--t-hover) var(--ease);
+  will-change: transform, opacity;
 }
 
+/* Franja invisible bajo el bloque: al subir 2px no se escapa del cursor
+   (si no, el hover parpadea en el borde inferior). */
+.subject-block::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -5px;
+  height: 5px;
+}
+
+/* Brillo + sombra de hover en una capa que solo cambia de opacidad. */
 .subject-block::after {
   content: "";
   position: absolute;
   inset: 0;
   border-radius: inherit;
   background: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.15);
   opacity: 0;
   pointer-events: none;
   transition: opacity var(--t-hover) var(--ease);
+  will-change: opacity;
 }
 
 .subject-block:hover {
   transform: translateY(-2px) scale(1.01);
-  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.15);
 }
 
 .subject-block:hover::after { opacity: 1; }

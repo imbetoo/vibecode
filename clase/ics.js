@@ -1,7 +1,7 @@
 /*
  * Parseador mínimo de calendarios iCalendar (.ics), pensado para la
  * exportación del calendario de Moodle. Solo lee lo que usa la vista de
- * tareas: SUMMARY, DTSTART, DTEND y CATEGORIES de cada VEVENT.
+ * tareas: UID, SUMMARY, DTSTART, DTEND y CATEGORIES de cada VEVENT.
  */
 
 /** Deshace el "folding": una línea que empieza por espacio o tab continúa la anterior. */
@@ -53,7 +53,7 @@ function parseICSDate(value, params = {}) {
 
 /**
  * Extrae los eventos de un texto .ics.
- * @returns {{summary: string, start: Date, end: Date, allDay: boolean, category: string}[]}
+ * @returns {{uid: string, summary: string, start: Date, end: Date, allDay: boolean, category: string}[]}
  */
 function parseICS(text) {
   const events = [];
@@ -67,8 +67,11 @@ function parseICS(text) {
         const end = current.end ? current.end.date
           : allDay ? new Date(start.getFullYear(), start.getMonth(), start.getDate() + 1)
           : start;
+        const summary = current.summary || '(Sin título)';
         events.push({
-          summary: current.summary || '(Sin título)',
+          // Sin UID (raro en Moodle) se usa una clave estable de título + fecha.
+          uid: current.uid || `${summary}|${start.toISOString()}`,
+          summary,
           start,
           end,
           allDay,
@@ -81,7 +84,8 @@ function parseICS(text) {
     if (!current) continue;
     const prop = parseICSLine(line);
     if (!prop) continue;
-    if (prop.name === 'SUMMARY') current.summary = unescapeICSText(prop.value).trim();
+    if (prop.name === 'UID') current.uid = prop.value.trim();
+    else if (prop.name === 'SUMMARY') current.summary = unescapeICSText(prop.value).trim();
     else if (prop.name === 'DTSTART') current.start = parseICSDate(prop.value, prop.params);
     else if (prop.name === 'DTEND') current.end = parseICSDate(prop.value, prop.params);
     else if (prop.name === 'CATEGORIES') current.category = unescapeICSText(prop.value).trim();

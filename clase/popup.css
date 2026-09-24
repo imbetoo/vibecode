@@ -27,6 +27,7 @@ body {
   --focus: rgba(29, 29, 31, 0.7);
   --shadow: rgba(20, 24, 40, 0.14);
   --app-edge: rgba(0, 0, 0, 0.08);
+  --check-border: rgba(0, 0, 0, 0.28);
 }
 
 body.dark-theme {
@@ -46,6 +47,7 @@ body.dark-theme {
   --focus: rgba(245, 245, 247, 0.8);
   --shadow: rgba(0, 0, 0, 0.4);
   --app-edge: rgba(255, 255, 255, 0.08);
+  --check-border: rgba(255, 255, 255, 0.4);
 }
 
 * { box-sizing: border-box; }
@@ -174,7 +176,6 @@ button:focus-visible {
   background: var(--glass-strong);
   border: 1px solid var(--glass-border);
   box-shadow: 0 10px 30px var(--shadow);
-  backdrop-filter: blur(18px);
   transition: transform var(--t-hover) var(--ease), background var(--t-hover) var(--ease);
 }
 
@@ -394,6 +395,7 @@ button:focus-visible {
   align-items: center;
   justify-content: center;
   transition: opacity var(--t-hover) var(--ease), transform var(--t-hover) var(--ease);
+  will-change: transform, opacity;
 }
 
 .time-pill__dash {
@@ -419,6 +421,11 @@ button:focus-visible {
 .time-pill__label.is-long { font-size: 11px; }
 
 .time-pill__icon { display: flex; }
+
+/* Los dos iconos están siempre en el DOM; solo se alterna cuál se ve. */
+.time-pill__icon .icon-check { display: none; }
+.time-pill__icon.is-done .icon-check { display: block; }
+.time-pill__icon.is-done .icon-clock { display: none; }
 
 .time-pill:hover .time-pill__times {
   opacity: 0;
@@ -452,30 +459,46 @@ button:focus-visible {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.35),
     0 8px 20px var(--shadow);
-  overflow: hidden;
   cursor: default;
-  transition: transform var(--t-hover) var(--ease), box-shadow var(--t-hover) var(--ease);
+  /* Solo transform y opacity se animan: van en la GPU, sin repintar. */
+  transition: transform var(--t-hover) var(--ease);
+  will-change: transform, opacity;
 }
 
+/* Al subir 2px en hover, el bloque se alejaría del cursor en su borde
+   inferior y el hover parpadearía. Esta franja invisible cubre ese hueco. */
+.subject-block::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -5px;
+  height: 5px;
+}
+
+/* Brillo y sombra de hover en una capa aparte: se muestra con opacity en
+   vez de animar box-shadow (que repinta en cada frame). */
 .subject-block::after {
   content: "";
   position: absolute;
   inset: 0;
   border-radius: inherit;
   background: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.15);
   opacity: 0;
   pointer-events: none;
   transition: opacity var(--t-hover) var(--ease);
+  will-change: opacity;
 }
 
 .subject-block:hover {
   transform: translateY(-2px) scale(1.01);
-  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.15);
 }
 
 .subject-block:hover::after { opacity: 1; }
 
 .subject-block__name {
+  min-width: 0;
   font-size: 15px;
   font-weight: 700;
   white-space: nowrap;
@@ -629,6 +652,9 @@ button:focus-visible {
 /* Lista de eventos */
 
 .tasks-list {
+  /* flex en columna para poder mandar las completadas al fondo con `order`. */
+  display: flex;
+  flex-direction: column;
   flex: 1;
   min-height: 0;
   margin: 0 -6px;
@@ -641,12 +667,67 @@ button:focus-visible {
 .task {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   padding: 10px 4px;
   border-bottom: 1px solid var(--glass-border);
 }
 
-.task:last-child { border-bottom: 0; }
+/* Casilla redonda estilo Recordatorios de Apple. */
+.task__check {
+  appearance: none;
+  flex: none;
+  display: grid;
+  place-content: center;
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  border-radius: 50%;
+  border: 2px solid var(--check-border);
+  background: transparent;
+  cursor: pointer;
+  transition: background-color var(--t-hover) var(--ease), border-color var(--t-hover) var(--ease);
+}
+
+.task__check::after {
+  content: "";
+  width: 9px;
+  height: 5px;
+  margin-top: -2px;
+  border: solid #fff;
+  border-width: 0 0 2px 2px;
+  transform: rotate(-45deg) scale(0);
+  transition: transform 0.2s var(--ease);
+}
+
+.task__check:hover { border-color: #0a84ff; }
+
+.task__check:checked {
+  border-color: #0a84ff;
+  background: #0a84ff;
+}
+
+.task__check:checked::after { transform: rotate(-45deg) scale(1); }
+
+.task__check:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* Completada: tachada, atenuada y al final de la lista. */
+.task--completed { order: 1; }
+
+.task--completed > :not(.task__check) {
+  opacity: 0.5;
+  transition: opacity var(--t-hover) var(--ease);
+}
+
+.task--completed .task__title,
+.task--completed .task__meta { text-decoration: line-through; }
+
+.task--completed .task__when.is-soon {
+  color: var(--icon);
+  background: var(--control);
+}
 
 .task__date {
   flex: none;

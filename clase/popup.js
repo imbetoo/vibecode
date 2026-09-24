@@ -35,7 +35,8 @@
   const ipeText = document.getElementById('ipe-countdown-text');
 
   function updateIPECountdown() {
-    ipeText.textContent = ipeCountdownText();
+    const text = ipeCountdownText();
+    if (ipeText.textContent !== text) ipeText.textContent = text; // solo el texto, y solo si cambia
   }
 
   // Cada minuto, arrancando en el cambio de minuto para no ir desfasado.
@@ -81,13 +82,13 @@
 
   // ---------- Horario diario ----------
 
-  const iconSvg = path =>
-    '<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">' +
+  const iconSvg = (cls, path) =>
+    `<svg class="${cls}" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">` +
     '<circle cx="12" cy="12" r="11" fill="currentColor"/>' +
     `<path d="${path}" fill="none" stroke="var(--pill-bg)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>` +
     '</svg>';
-  const CLOCK_ICON = iconSvg('M12 6.5V12l3.5 2.5');
-  const CHECK_ICON = iconSvg('M7 12.5l3.2 3.2L17 9');
+  // Reloj y check van juntos; el hover solo alterna la clase is-done.
+  const STATUS_ICONS = iconSvg('icon-clock', 'M12 6.5V12l3.5 2.5') + iconSvg('icon-check', 'M7 12.5l3.2 3.2L17 9');
 
   /** Momento (Date) de una hora "HH:MM" en la fecha dada. */
   function at(date, time) {
@@ -110,14 +111,14 @@
     const start = at(dayDate, slot.start);
     const end = at(dayDate, slot.end);
     if (now >= end) {
-      return { label: 'Ya pasó', icon: CHECK_ICON, title: 'Clase terminada' };
+      return { label: 'Ya pasó', done: true, title: 'Clase terminada' };
     }
     if (now >= start) {
       const left = Math.ceil((end - now) / 60000);
-      return { label: `${left} min`, icon: CLOCK_ICON, title: `Quedan ${left} min` };
+      return { label: `${left} min`, done: false, title: `Quedan ${left} min` };
     }
     const until = Math.ceil((start - now) / 60000);
-    return { label: formatUntil(until), icon: CLOCK_ICON, title: `Empieza ${formatUntil(until).toLowerCase()}` };
+    return { label: formatUntil(until), done: false, title: `Empieza ${formatUntil(until).toLowerCase()}` };
   }
 
   function createTimePill(slot, isNow, dayDate) {
@@ -145,14 +146,18 @@
     label.className = 'time-pill__label';
     const icon = document.createElement('span');
     icon.className = 'time-pill__icon';
+    icon.innerHTML = STATUS_ICONS; // una sola vez, al crear la píldora
     status.append(label, icon);
 
+    // En cada hover solo se tocan el texto y dos clases, y solo si cambian.
     const updateStatus = () => {
       const state = slotStatus(slot, dayDate);
-      label.textContent = state.label;
-      label.classList.toggle('is-long', state.label.length > 7);
-      icon.innerHTML = state.icon;
-      pill.title = state.title;
+      if (label.textContent !== state.label) {
+        label.textContent = state.label;
+        label.classList.toggle('is-long', state.label.length > 7);
+      }
+      icon.classList.toggle('is-done', state.done);
+      if (pill.title !== state.title) pill.title = state.title;
     };
     updateStatus();
     pill.addEventListener('mouseenter', updateStatus);
@@ -285,6 +290,57 @@
     tasksSettings.hidden = false;
   }
 
+  // Tareas marcadas como hechas: UIDs del .ics en chrome.storage.sync, para
+  // que se compartan entre los ordenadores con la misma cuenta de Chrome.
+  const DONE_KEY = 'completedTasks';
+  let completed = new Set();
+  let loadedAt = '';
+
+  async function readCompleted() {
+    const { [DONE_KEY]: list } = await chrome.storage.sync.get(DONE_KEY);
+    return new Set(Array.isArray(list) ? list : []);
+  }
+
+  async function saveCompleted() {
+    try {
+      await chrome.storage.sync.set({ [DONE_KEY]: [...completed] });
+    } catch (error) {
+      setTasksStatus(`No se pudo sincronizar (${error.message})`, true);
+    }
+  }
+
+  function updateTasksCount() {
+    const pending = tasksList.querySelectorAll('.task:not(.task--completed)').length;
+    setTasksStatus(`${pending} ${pending === 1 ? 'pendiente' : 'pendientes'} · ${loadedAt}`);
+  }
+
+  /** Refleja `completed` en los li ya pintados: solo clases y checked, sin reconstruir. */
+  function applyCompleted() {
+    for (const li of tasksList.querySelectorAll('.task')) {
+      const done = completed.has(li.dataset.uid);
+      li.classList.toggle('task--completed', done);
+      li.querySelector('.task__check').checked = done;
+    }
+    updateTasksCount();
+  }
+
+  /** Parsea el .ics en un Web Worker para no bloquear el hilo principal. */
+  function parseInWorker(text) {
+    return new Promise((resolve, reject) => {
+      const worker = new Worker('ics-worker.js');
+      worker.onmessage = ({ data }) => {
+        worker.terminate();
+        if (data.error) reject(new Error(data.error));
+        else resolve(data);
+      };
+      worker.onerror = event => {
+        worker.terminate();
+        reject(new Error(event.message || 'error al leer el calendario'));
+      };
+      worker.postMessage({ text, now: Date.now() });
+    });
+  }
+
   let loadSeq = 0;
 
   async function loadTasks() {
@@ -299,33 +355,37 @@
     setTasksStatus('Cargando…');
     tasksList.replaceChildren();
 
-    let text;
+    let parsed, done;
     try {
       const response = await fetch(url, { cache: 'no-store' });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      text = await response.text();
+      const text = await response.text();
+      if (!text.includes('BEGIN:VCALENDAR')) throw new Error('el enlace no devuelve un calendario .ics');
+      [parsed, done] = await Promise.all([parseInWorker(text), readCompleted()]);
     } catch (error) {
       if (seq === loadSeq) setTasksStatus(`No se pudo cargar (${error.message})`, true);
       return;
     }
     if (seq !== loadSeq) return; // hubo otra carga (o un cambio de enlace) mientras tanto
-    if (!text.includes('BEGIN:VCALENDAR')) {
-      setTasksStatus('El enlace no devuelve un calendario .ics', true);
-      return;
-    }
 
-    const events = upcomingEvents(parseICS(text));
-    renderTasks(events);
-    const time = new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
-    setTasksStatus(`${events.length} ${events.length === 1 ? 'pendiente' : 'pendientes'} · ${time}`);
+    // Olvida las completadas que ya no están en el calendario: así la lista
+    // guardada no crece sin límite (sync admite 8 KB por clave).
+    const inFeed = new Set(parsed.uids);
+    completed = new Set([...done].filter(uid => inFeed.has(uid)));
+    if (completed.size !== done.size) saveCompleted();
+
+    loadedAt = new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+    renderTasks(parsed.upcoming);
   }
 
+  /** Pinta la lista una vez por carga; marcar tareas después no la reconstruye. */
   function renderTasks(events) {
     if (!events.length) {
       const empty = document.createElement('li');
       empty.className = 'tasks-empty';
       empty.textContent = 'No hay tareas próximas. ¡Todo al día!';
       tasksList.replaceChildren(empty);
+      updateTasksCount();
       return;
     }
 
@@ -333,6 +393,12 @@
     const items = events.map(event => {
       const li = document.createElement('li');
       li.className = 'task';
+      li.dataset.uid = event.uid;
+
+      const check = document.createElement('input');
+      check.type = 'checkbox';
+      check.className = 'task__check';
+      check.setAttribute('aria-label', `Marcar como hecha: ${event.summary}`);
 
       const date = document.createElement('span');
       date.className = 'task__date';
@@ -365,11 +431,32 @@
       when.classList.toggle('is-soon', minutes < 24 * 60);
 
       li.title = `${event.summary}\n${event.start.toLocaleString('es-ES')}`;
-      li.append(date, body, when);
+      li.append(check, date, body, when);
       return li;
     });
     tasksList.replaceChildren(...items);
+    applyCompleted();
   }
+
+  // Un solo listener para todas las casillas (delegación de eventos).
+  tasksList.addEventListener('change', event => {
+    const check = event.target;
+    if (!check.matches('.task__check')) return;
+    const li = check.closest('.task');
+    if (check.checked) completed.add(li.dataset.uid);
+    else completed.delete(li.dataset.uid);
+    li.classList.toggle('task--completed', check.checked);
+    updateTasksCount();
+    saveCompleted();
+  });
+
+  // Si se marca una tarea en otro ordenador, se refleja aquí sin recargar.
+  // (Fuera de la extensión, p. ej. abriendo popup.html a mano, no hay chrome.storage.)
+  globalThis.chrome?.storage?.onChanged.addListener((changes, area) => {
+    if (area !== 'sync' || !changes[DONE_KEY]) return;
+    completed = new Set(changes[DONE_KEY].newValue || []);
+    applyCompleted();
+  });
 
   tasksSetup.addEventListener('submit', async event => {
     event.preventDefault();
