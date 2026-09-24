@@ -222,80 +222,54 @@ body {
 
 .time-pill__end { order: 2; }
 
-/* ---------- Recreo con lupa ----------
- * Base y lente van superpuestas en la misma celda de grid (sin top/left).
- * La lente es una copia del recreo recortada en círculo; el JS solo le cambia
- * el transform a ella y a su contenido, así que todo va en la GPU.
- */
-.break-row,
-.mag-lens {
-  display: grid;
-  /* Pistas fijas al tamaño de la celda: el aro de 120px no la estira. */
-  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
-}
-
 .break-row {
   grid-column: 1 / -1;
-  cursor: default;
-}
-
-.mag-base,
-.mag-content {
-  grid-area: 1 / 1;
   display: flex;
   align-items: center;
   gap: 12px;
-  height: 100%;
   padding: 0 6px;
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  white-space: nowrap;
   color: var(--text-soft);
+  cursor: default;
 }
 
-.mag-base::before,
-.mag-base::after,
-.mag-content::before,
-.mag-content::after {
+.break-row::before,
+.break-row::after {
   content: "";
   flex: 1;
   height: 1px;
   background: var(--glass-border);
 }
 
-.mag-lens {
-  grid-area: 1 / 1;
-  overflow: hidden;
-  pointer-events: none;
-  clip-path: circle(60px at center);
-  background: var(--card-bg);
-  /* Borde: el clip-path corta el border, así que se pinta con sombras
-     interiores (arriba y abajo) y un aro en ::after (los lados curvos). */
-  box-shadow: inset 0 2px 0 var(--accent), inset 0 -2px 0 var(--accent);
+.break-row__label {
+  white-space: nowrap;
+  transition: color var(--t-hover) var(--ease);
+}
+
+/* Etiqueta oculta que entra deslizándose al pasar el ratón (opacity + transform). */
+.break-row__tag {
+  display: inline-block;
+  margin-left: 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--accent);
   opacity: 0;
-  transition: opacity var(--t-hover) var(--ease);
+  transform: translateX(-10px);
+  transition: opacity var(--t-hover) var(--ease), transform var(--t-hover) var(--ease);
   will-change: transform, opacity;
 }
 
-.mag-lens::after {
-  content: "";
-  grid-area: 1 / 1;
-  place-self: center;
-  width: 120px;
-  height: 120px;
-  border-radius: 50%;
-  box-shadow: inset 0 0 0 2px var(--accent);
-}
+.break-row:hover .break-row__label { color: var(--text); }
 
-.mag-content {
-  color: var(--text);
-  transform-origin: center;
-  will-change: transform;
+.break-row:hover .break-row__tag {
+  opacity: 1;
+  transform: translateX(0);
 }
-
-.break-row:hover .mag-lens { opacity: 1; }
 
 .empty-cell {
   display: flex;

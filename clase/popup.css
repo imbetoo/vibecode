@@ -256,6 +256,14 @@ button:focus-visible {
 }
 
 .menu-button--ipe.is-checked { opacity: 0.5; }
+
+/* Salida antes de cambiar de sitio (la entrada es quitar la clase: vuelve
+   con la transición normal de --t-hover). */
+.menu-button--ipe.is-leaving {
+  opacity: 0;
+  transform: scale(0.95);
+  transition-duration: 0.25s;
+}
 .menu-button--ipe.is-checked .ipe-clock { animation-play-state: paused; }
 
 .menu-button--ipe.is-checked .menu-button__title,

@@ -67,23 +67,19 @@
     add(pill, row(slot.id), null, 1);
   });
 
-  // Recreo, con lupa: una copia ampliada del texto dentro de una máscara
-  // circular que sigue al ratón (ver setupMagnifier).
+  // Recreo: al pasar el ratón aparece la etiqueta "// DESCANSO".
   if (slots.length > BREAK.afterSlot) {
-    const text = `Recreo · ${formatTime(BREAK.start)} – ${formatTime(BREAK.end)}`;
-    const breakRow = div('break-row js-mag-container');
-    const base = document.createElement('span');
-    base.className = 'mag-base';
-    base.textContent = text;
-    const lens = div('mag-lens js-mag-lens');
-    lens.setAttribute('aria-hidden', 'true');
-    const content = document.createElement('span');
-    content.className = 'mag-content js-mag-content';
-    content.textContent = text;
-    lens.append(content);
-    breakRow.append(base, lens);
+    const breakRow = div('break-row');
+    const label = document.createElement('span');
+    label.className = 'break-row__label';
+    label.textContent = `Recreo · ${formatTime(BREAK.start)} – ${formatTime(BREAK.end)}`;
+    const tag = document.createElement('span');
+    tag.className = 'break-row__tag';
+    tag.setAttribute('aria-hidden', 'true');
+    tag.textContent = '// DESCANSO';
+    label.append(tag);
+    breakRow.append(label);
     add(breakRow, BREAK.afterSlot + 1 + HEADER_ROWS);
-    setupMagnifier(breakRow, lens, content);
   }
 
   // Bloques de asignaturas y huecos libres. Se guardan los contadores de
@@ -176,30 +172,6 @@
     item.append(sizer, card);
     legend.append(item);
   });
-
-  // ---------- Lupa del recreo (solo transform, en la GPU) ----------
-  // La lente se desplaza (x, y) hasta el ratón y su contenido lo contrario,
-  // así el texto ampliado queda alineado con el de debajo. El scale va
-  // primero para que el punto ampliado sea justo el que está bajo el cursor.
-  function setupMagnifier(container, lens, content) {
-    const SCALE = 1.35;
-    let pointer = null;
-    let frame = 0;
-
-    const paint = () => {
-      frame = 0;
-      const rect = container.getBoundingClientRect();
-      const x = pointer.x - rect.left - rect.width / 2;
-      const y = pointer.y - rect.top - rect.height / 2;
-      lens.style.transform = `translate3d(${x}px, ${y}px, 0)`;
-      content.style.transform = `scale(${SCALE}) translate3d(${-x}px, ${-y}px, 0)`;
-    };
-
-    container.addEventListener('mousemove', event => {
-      pointer = { x: event.clientX, y: event.clientY };
-      if (!frame) frame = requestAnimationFrame(paint);
-    });
-  }
 
   // ---------- Tareas del Aula Virtual ----------
 

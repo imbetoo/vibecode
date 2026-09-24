@@ -53,9 +53,10 @@
   /**
    * Reordena el menú con FLIP: mide dónde está cada tarjeta, cambia el
    * orden y las anima (solo transform, en la GPU) desde su sitio anterior.
+   * La tarjeta de IPE no entra: ella hace su propia salida y entrada.
    */
   function reorderMenu(change) {
-    const cards = [...menuButtons.children];
+    const cards = [...menuButtons.children].filter(card => card !== ipeCard);
     const before = cards.map(card => card.getBoundingClientRect().top);
     change();
     const ease = getComputedStyle(document.documentElement).getPropertyValue('--ease').trim();
@@ -79,10 +80,33 @@
     const done = Boolean(deadline) && ipeDoneFor === deadline;
     if (ipeCheck.checked !== done) ipeCheck.checked = done;
     if (ipeCheck.disabled !== !deadline) ipeCheck.disabled = !deadline;
+    moveIpeCard(done, animate && currentView() === 'menu');
+  }
+
+  // Cambio de sitio en tres tiempos: la tarjeta sale (se encoge y se
+  // desvanece), con ella invisible cambia el `order` mientras las demás se
+  // deslizan a su hueco, y vuelve a entrar ya en su nueva posición.
+  const IPE_LEAVE_MS = 250; // igual que la transición de .is-leaving en popup.css
+  let ipeTarget = null;     // estado al que va la tarjeta mientras sale
+  let ipeTimer = 0;
+
+  function moveIpeCard(done, animate) {
+    if (!animate) {
+      clearTimeout(ipeTimer);
+      ipeTimer = 0;
+      ipeCard.classList.remove('is-leaving');
+      ipeCard.classList.toggle('is-checked', done);
+      return;
+    }
+    ipeTarget = done;
+    if (ipeTimer) return; // ya está saliendo: al terminar usará el último estado
     if (ipeCard.classList.contains('is-checked') === done) return;
-    const toggle = () => ipeCard.classList.toggle('is-checked', done);
-    if (animate && currentView() === 'menu') reorderMenu(toggle);
-    else toggle();
+    ipeCard.classList.add('is-leaving');
+    ipeTimer = setTimeout(() => {
+      ipeTimer = 0;
+      reorderMenu(() => ipeCard.classList.toggle('is-checked', ipeTarget));
+      ipeCard.classList.remove('is-leaving'); // entrada: vuelve a su escala y opacidad
+    }, IPE_LEAVE_MS);
   }
 
   async function loadIpeDone() {
