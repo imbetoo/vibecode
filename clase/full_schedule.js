@@ -2,6 +2,12 @@
   const grid = document.getElementById('week-grid');
   const HEADER_ROWS = 1;
 
+  // Fondo de la pastilla de tareas (el texto siempre es amarillo #ffd60a).
+  // Medido con la paleta de SUBJECTS: con estas opacidades el amarillo queda
+  // a ≥ 3,9:1 de contraste en todos los bloques (con 0.35 / 0.1 bajaba a 2,1:1).
+  const BADGE_BG_ON_LIGHT = 'rgba(0, 0, 0, 0.55)'; // bloque claro (texto oscuro)
+  const BADGE_BG_ON_DARK = 'rgba(0, 0, 0, 0.3)';   // bloque oscuro (texto blanco)
+
   const now = new Date();
   const weekday = now.getDay();
   const todayCol = weekday >= 1 && weekday <= 5 ? weekday - 1 : null;
@@ -98,7 +104,6 @@
       const el = div('subject-block');
       el.style.background = subject.color;
       el.style.color = textColorFor(subject.color);
-      el.classList.toggle('is-light', luminanceOf(subject.color) > 0.35);
 
       const first = TIME_SLOTS.find(s => s.id === block.from);
       const last = TIME_SLOTS.find(s => s.id === block.to);
@@ -107,6 +112,10 @@
       el.append(div('subject-block__meta', `${block.code} · ${formatTime(first.start)}–${formatTime(last.end)}`));
       const counter = div('subject-block__tasks');
       counter.hidden = true;
+      // Misma regla que textColorFor: si el texto del bloque es oscuro, el
+      // fondo es claro y la pastilla necesita un fondo más fuerte.
+      const lightBlock = luminanceOf(subject.color) > 0.35;
+      counter.style.backgroundColor = lightBlock ? BADGE_BG_ON_LIGHT : BADGE_BG_ON_DARK;
       el.append(counter);
       taskCounters.push({ code: block.code, el: counter });
 

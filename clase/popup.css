@@ -536,8 +536,13 @@ button:focus-visible {
   will-change: opacity;
 }
 
+/* Sin retraso ni al entrar ni al salir (igual que en el horario completo). */
+.subject-block,
+.subject-block::after { transition-delay: 0ms; }
+
 .subject-block:hover {
   transform: translateY(-2px) scale(1.01);
+  transition-delay: 0ms;
 }
 
 .subject-block:hover::after { opacity: 1; }

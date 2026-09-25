@@ -29,6 +29,7 @@ body {
   --card-bg: rgba(255, 255, 255, 0.94);
   --accent: #0a84ff;
   --slot-task-bg: #3a3a3c;
+  --pill-edge: rgba(255, 255, 255, 0.1);  /* pastilla oscura en tema claro */
 }
 
 body.dark-theme {
@@ -49,6 +50,7 @@ body.dark-theme {
   --shadow: rgba(0, 0, 0, 0.45);
   --card-bg: rgba(44, 44, 48, 0.94);
   --slot-task-bg: #2c2c2e;
+  --pill-edge: rgba(0, 0, 0, 0.08);       /* pastilla clara en tema oscuro */
 }
 
 * { box-sizing: border-box; }
@@ -234,8 +236,33 @@ body {
   color: var(--pill-text);
   border-radius: 13px;
   background: var(--pill-bg);
-  box-shadow: 0 4px 12px var(--shadow);
+  /* Volumen: borde interior semitransparente, brillo arriba y sombra suave. */
+  border: 1px solid var(--pill-edge);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 2px 8px rgba(0, 0, 0, 0.08),
+    0 4px 12px var(--shadow);
+  cursor: default;
+  position: relative;
+  transition: transform var(--t-hover) var(--ease);
+  will-change: transform;
 }
+
+/* Sombra extra del hover en una capa aparte que solo cambia de opacidad
+   (animar box-shadow repinta en cada frame). */
+.time-pill::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--t-hover) var(--ease);
+}
+
+.time-pill:hover { transform: scale(1.02); }
+.time-pill:hover::before { opacity: 1; }
 
 .time-pill::after {
   content: "";
@@ -315,6 +342,13 @@ body {
   margin-left: 6px;
   opacity: 1;
 }
+
+/* El recreo espera 150 ms antes de abrirse; al salir, se cierra al instante. */
+.break-pill,
+.break-extra { transition-delay: 0ms; }
+
+.break-row:hover .break-pill,
+.break-row:hover .break-extra { transition-delay: 150ms; }
 
 .empty-cell {
   display: flex;
@@ -425,8 +459,14 @@ body {
   will-change: opacity;
 }
 
+/* Retrasos de hover: solo en el estado :hover (filtran barridos rápidos del
+   ratón); sin :hover el retraso es 0, así que la salida es inmediata. */
+.subject-block,
+.subject-block::after { transition-delay: 0ms; }
+
 .subject-block:hover {
   transform: translateY(-2px) scale(1.01);
+  transition-delay: 0ms;
 }
 
 .subject-block:hover::after { opacity: 1; }
@@ -447,15 +487,20 @@ body {
   opacity: 0.72;
 }
 
-/* Contador de tareas pendientes de Moodle (amarillo; ámbar en bloques claros). */
+/* Pastilla de tareas pendientes de Moodle: texto siempre amarillo; el fondo
+   (más fuerte en bloques claros) lo pone el JS según el color del bloque. */
 .subject-block__tasks {
-  display: flex;
+  display: inline-flex;
+  align-self: flex-start;
   align-items: center;
   gap: 6px;
+  margin-top: 2px;
+  padding: 2px 8px;
   font-size: 12.5px;
-  font-weight: 700;
+  font-weight: 600;
   white-space: nowrap;
-  color: #ffd60a;
+  border-radius: 999px;
+  color: #ffd60a !important;
   animation: fade-in var(--t-expand) var(--ease);
 }
 
@@ -469,8 +514,6 @@ body {
   box-shadow: 0 0 6px currentColor;
 }
 
-.subject-block.is-light .subject-block__tasks { color: #8a5a00; }
-.subject-block.is-light .subject-block__tasks::before { box-shadow: none; }
 
 /* ---------- Leyenda (hover: tarjeta con detalles) ----------
  * Cada elemento reserva en el flujo el tamaño de la pastilla (.legend-sizer,
@@ -616,6 +659,13 @@ body {
   max-width: 0;
   opacity: 0;
 }
+
+/* Leyenda: 80 ms de espera al pasar el ratón (con teclado, sin espera). La
+   salida no tiene retraso porque el estado normal no lo declara. */
+.legend-item:hover .legend-card,
+.legend-item:hover .legend-card .legend-name,
+.legend-item:hover .legend-card .legend-head .legend-code,
+.legend-item:hover .legend-details { transition-delay: 80ms; }
 
 .legend-item:hover .legend-details,
 .legend-item:focus-visible .legend-details {
