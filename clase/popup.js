@@ -51,23 +51,26 @@
   let ipeDoneFor = '';
 
   /**
-   * Reordena el menú con FLIP: mide dónde está cada tarjeta, cambia el
-   * orden y las anima (solo transform, en la GPU) desde su sitio anterior.
-   * La tarjeta de IPE no entra: ella hace su propia salida y entrada.
+   * Reordena con FLIP: mide dónde está cada elemento, aplica el cambio y los
+   * anima (solo transform, en la GPU) desde su sitio anterior. El elemento
+   * que cambia de sitio no entra: hace su propia salida y entrada.
    */
-  function reorderMenu(change) {
-    const cards = [...menuButtons.children].filter(card => card !== ipeCard);
-    const before = cards.map(card => card.getBoundingClientRect().top);
+  function flipReorder(items, change) {
+    const before = items.map(item => item.getBoundingClientRect().top);
     change();
     const ease = getComputedStyle(document.documentElement).getPropertyValue('--ease').trim();
-    cards.forEach((card, i) => {
-      const dy = before[i] - card.getBoundingClientRect().top;
+    items.forEach((item, i) => {
+      const dy = before[i] - item.getBoundingClientRect().top;
       if (!dy) return;
-      card.animate(
+      item.animate(
         [{ transform: `translateY(${dy}px)` }, { transform: 'none' }],
         { duration: 600, easing: ease }
       );
     });
+  }
+
+  function reorderMenu(change) {
+    flipReorder([...menuButtons.children].filter(card => card !== ipeCard), change);
   }
 
   /** Solo alterna clases, `checked` y `disabled`, y solo si cambian. */
@@ -549,6 +552,30 @@
     applyCompleted();
   }
 
+  // Al marcar, la tarea no se teletransporta: sale (.is-exiting, 200 ms),
+  // cambia de `order` mientras es invisible (las demás se deslizan a su
+  // hueco) y entra ya en su sitio (.is-entering, 300 ms).
+  const TASK_EXIT_MS = 200;
+  const TASK_ENTER_MS = 300;
+  const taskTimers = new WeakMap();
+
+  function moveTask(li) {
+    clearTimeout(taskTimers.get(li));
+    li.classList.remove('is-entering');
+    li.classList.add('is-exiting');
+    taskTimers.set(li, setTimeout(() => {
+      const others = [...tasksList.children].filter(item => item !== li);
+      flipReorder(others, () => {
+        // Estado actual (por si se volvió a marcar o llegó un cambio de sync).
+        li.classList.toggle('task--completed', completed.has(li.dataset.uid));
+      });
+      li.classList.remove('is-exiting');
+      li.classList.add('is-entering');
+      updateTasksCount();
+      taskTimers.set(li, setTimeout(() => li.classList.remove('is-entering'), TASK_ENTER_MS));
+    }, TASK_EXIT_MS));
+  }
+
   // Un solo listener para todas las casillas (delegación de eventos).
   tasksList.addEventListener('change', event => {
     const check = event.target;
@@ -556,8 +583,7 @@
     const li = check.closest('.task');
     if (check.checked) completed.add(li.dataset.uid);
     else completed.delete(li.dataset.uid);
-    li.classList.toggle('task--completed', check.checked);
-    updateTasksCount();
+    moveTask(li);
     saveCompleted();
   });
 

@@ -783,6 +783,21 @@ button:focus-visible {
   outline-offset: 2px;
 }
 
+/* Cambio de sitio al marcar: sale encogiéndose, cambia de `order` invisible
+   y entra en su nueva posición (ver moveTask en popup.js). */
+.task.is-exiting {
+  opacity: 0;
+  transform: scale(0.95);
+  transition: opacity 0.2s var(--ease), transform 0.2s var(--ease);
+}
+
+.task.is-entering { animation: task-enter 0.3s var(--ease); }
+
+@keyframes task-enter {
+  from { opacity: 0; transform: scale(0.95); }
+  to   { opacity: 1; transform: none; }
+}
+
 /* Completada: tachada, atenuada y al final de la lista. */
 .task--completed { order: 1; }
 

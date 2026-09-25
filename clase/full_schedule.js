@@ -331,12 +331,42 @@
     return remainingText(Math.ceil((end - now) / 60000));
   }
 
-  // Cada segundo, alineado al cambio de segundo; solo cambia textContent.
-  function tick() {
+  // Reloj en tres bloques (hh:mm:ss) creados una sola vez. Cada segundo solo
+  // se toca el textContent del bloque que cambia y se le pone .tick para la
+  // animación de entrada; animationend la quita para el siguiente cambio.
+  const clockParts = ['clock-h', 'clock-m', 'clock-s'].map((id, i) => {
+    const part = document.createElement('span');
+    part.id = id;
+    part.className = 'clock-part';
+    part.addEventListener('animationend', () => part.classList.remove('tick'));
+    if (i) {
+      const sep = document.createElement('span');
+      sep.className = 'clock-sep';
+      sep.textContent = ':';
+      clock.append(sep);
+    }
+    clock.append(part);
+    return part;
+  });
+
+  const pad = n => String(n).padStart(2, '0');
+
+  function renderClock(now, animate) {
+    [now.getHours(), now.getMinutes(), now.getSeconds()].forEach((value, i) => {
+      const part = clockParts[i];
+      const text = pad(value);
+      if (part.textContent === text) return;
+      part.textContent = text;
+      if (animate) part.classList.add('tick');
+    });
+  }
+
+  // Cada segundo, alineado al cambio de segundo.
+  function tick(animate = true) {
     const now = new Date();
-    setText(clock, now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+    renderClock(now, animate);
     setText(countdown, countdownText(now));
     setTimeout(tick, 1000 - (Date.now() % 1000));
   }
-  tick();
+  tick(false); // la primera pintura, sin animación
 })();
