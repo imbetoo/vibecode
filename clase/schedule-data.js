@@ -3,16 +3,27 @@
  * del horario completo. Para cambiar el horario basta con editar este archivo.
  */
 
-// Asignaturas: nombre visible, color del bloque, profesor y periodos semanales.
+// Asignaturas: nombre visible, color del bloque, profesor, periodos semanales
+// y `aliases`: cómo aparece la asignatura en el calendario de Moodle (la
+// categoría suele ser corta, p. ej. "IPE 1 DAW" o "CD 26-27"). Se buscan como
+// palabra completa y sin distinguir mayúsculas ni tildes (ver subjectOfEvent).
 const SUBJECTS = {
-  csdawBD:    { name: 'Bases de Datos',                 color: '#6accff', teacher: 'Mercedes Hernández Losada', periods: 7 },
-  csdawIP:    { name: 'Inglés Profesional',             color: '#ffe95e', teacher: 'María Elvira Varón Gil',    periods: 2 },
-  csdawCD:    { name: 'Contornos de Desenvolvemento',   color: '#921200', teacher: 'Patricia González Pardo',   periods: 3 },
-  csdawPR:    { name: 'Programación',                   color: '#ff94d0', teacher: 'Marta Rey López',           periods: 9 },
-  csdawLMSXI: { name: 'Linguaxe de Marcas e Sistemas',  color: '#7b75ff', teacher: 'Isaac Rincón Moraña',       periods: 4 },
-  csdawSSI:   { name: 'Sistemas Informáticos',          color: '#47ff94', teacher: 'Cristina Puga Barreiros',   periods: 6 },
-  csdawIPEI:  { name: 'Itinerario Persoal para a Empresa', color: '#ffb36b', teacher: 'Adelina Cobo Rodríguez',    periods: 4 },
-  csdawSASP:  { name: 'Sustentabilidade Aplicada',      color: '#f06a5a', teacher: 'Agustín Sobral Crespo',     periods: 1 }
+  csdawBD:    { name: 'Bases de Datos',                 color: '#6accff', teacher: 'Mercedes Hernández Losada', periods: 7,
+                aliases: ['BD', 'Bases de Datos'] },
+  csdawIP:    { name: 'Inglés Profesional',             color: '#ffe95e', teacher: 'María Elvira Varón Gil',    periods: 2,
+                aliases: ['IP', 'Inglés', 'English'] },
+  csdawCD:    { name: 'Contornos de Desenvolvemento',   color: '#921200', teacher: 'Patricia González Pardo',   periods: 3,
+                aliases: ['CD', 'Contornos', 'Entornos de Desarrollo'] },
+  csdawPR:    { name: 'Programación',                   color: '#ff94d0', teacher: 'Marta Rey López',           periods: 9,
+                aliases: ['PR', 'PRO', 'Programación'] },
+  csdawLMSXI: { name: 'Linguaxe de Marcas e Sistemas',  color: '#7b75ff', teacher: 'Isaac Rincón Moraña',       periods: 4,
+                aliases: ['LMSXI', 'LMSGI', 'Marcas'] },
+  csdawSSI:   { name: 'Sistemas Informáticos',          color: '#47ff94', teacher: 'Cristina Puga Barreiros',   periods: 6,
+                aliases: ['SSI', 'Sistemas Informáticos'] },
+  csdawIPEI:  { name: 'Itinerario Persoal para a Empresa', color: '#ffb36b', teacher: 'Adelina Cobo Rodríguez',    periods: 4,
+                aliases: ['IPE', 'IPEI', 'Itinerario'] },
+  csdawSASP:  { name: 'Sustentabilidade Aplicada',      color: '#f06a5a', teacher: 'Agustín Sobral Crespo',     periods: 1,
+                aliases: ['SASP', 'Sustentabilidade', 'Sostenibilidad'] }
 };
 
 // Tramos horarios fijos. El recreo va entre el tramo 4 y el 5.
@@ -179,4 +190,44 @@ function luminanceOf(hex) {
 /** Color de texto legible (oscuro o claro) sobre un fondo dado. */
 function textColorFor(hex) {
   return luminanceOf(hex) > 0.35 ? 'rgba(20, 20, 30, 0.88)' : 'rgba(255, 255, 255, 0.95)';
+}
+
+// ---------- Tareas de Moodle -> asignatura ----------
+
+/** Minúsculas y sin tildes: "Programación" y "PROGRAMACION" comparan igual. */
+function foldText(text) {
+  return String(text || '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+}
+
+/**
+ * Patrón de palabra completa para cada asignatura (su código y sus alias).
+ * `\b` de JS solo entiende ASCII, así que los límites se hacen con lookarounds
+ * Unicode: delante no puede haber letra ni número y detrás no puede haber letra
+ * ("CD 26-27" y "IPE1" sí; "CONDICIONES" o "IPE" para el alias "IP", no).
+ * Los términos más largos van primero.
+ */
+const SUBJECT_MATCHERS = Object.entries(SUBJECTS).map(([code, subject]) => {
+  const escape = term => foldText(term).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const terms = [code, ...(subject.aliases || [])].map(escape).sort((a, b) => b.length - a.length);
+  return { code, pattern: new RegExp(`(?<![\\p{L}\\p{N}])(?:${terms.join('|')})(?!\\p{L})`, 'u') };
+});
+
+/**
+ * Código de la asignatura de un evento, o null. Primero se mira la categoría
+ * (el curso, lo más fiable) y solo si no encaja nada, el título: así una tarea
+ * de SSI titulada "Configurar la IP" no acaba en Inglés Profesional.
+ * Si encajan varias, gana la coincidencia más larga.
+ */
+function subjectOfEvent(event) {
+  for (const text of [event.category, event.summary]) {
+    const folded = foldText(text);
+    if (!folded) continue;
+    let best = null;
+    for (const { code, pattern } of SUBJECT_MATCHERS) {
+      const match = pattern.exec(folded);
+      if (match && (!best || match[0].length > best.length)) best = { code, length: match[0].length };
+    }
+    if (best) return best.code;
+  }
+  return null;
 }

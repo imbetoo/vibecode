@@ -175,19 +175,6 @@
 
   // ---------- Tareas del Aula Virtual ----------
 
-  const norm = text => text.toLowerCase().replace(/[^a-z0-9]/g, '');
-  // Códigos más largos primero, para que uno corto no gane a otro que lo contiene.
-  const CODES = Object.keys(SUBJECTS)
-    .map(code => [code, norm(code)])
-    .sort((a, b) => b[1].length - a[1].length);
-
-  /** Asignatura de un evento de Moodle según su categoría (curso) o su título. */
-  function subjectOf(event) {
-    const haystack = norm(`${event.category} ${event.summary}`);
-    const match = CODES.find(([, key]) => haystack.includes(key));
-    return match ? match[0] : null;
-  }
-
   const sameDay = (a, b) =>
     a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 
@@ -231,12 +218,21 @@
   function applyTasks() {
     const pending = upcoming.filter(event => !completed.has(event.uid));
 
-    // Contador amarillo de cada bloque: tareas pendientes de su asignatura.
+    // Contador amarillo de cada bloque: TODAS las tareas pendientes futuras de
+    // su asignatura (esta semana o las siguientes). La asignatura sale de la
+    // categoría o el título del evento con los alias de SUBJECTS.
     const perSubject = {};
-    for (const event of pending) {
-      const code = subjectOf(event);
+    const assignments = pending.map(event => {
+      const code = subjectOfEvent(event);
       if (code) perSubject[code] = (perSubject[code] || 0) + 1;
-    }
+      return { tarea: event.summary, categoria: event.category, vence: event.start, asignatura: code };
+    });
+    console.log('Depuración Moodle:', {
+      eventosTotales: pending,
+      tareasAsignadas: perSubject,
+      detalle: assignments,
+      sinAsignar: assignments.filter(a => !a.asignatura)
+    });
     for (const { code, el } of taskCounters) {
       const n = perSubject[code] || 0;
       setText(el, `${n} ${n === 1 ? 'tarea pendiente' : 'tareas pendientes'}`);
