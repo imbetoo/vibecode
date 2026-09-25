@@ -67,18 +67,18 @@
     add(pill, row(slot.id), null, 1);
   });
 
-  // Recreo: al pasar el ratón aparece la etiqueta "// DESCANSO".
+  // Recreo: pastilla que en hover se abre con "// DESCANSO".
   if (slots.length > BREAK.afterSlot) {
     const breakRow = div('break-row');
-    const label = document.createElement('span');
-    label.className = 'break-row__label';
-    label.textContent = `Recreo · ${formatTime(BREAK.start)} – ${formatTime(BREAK.end)}`;
-    const tag = document.createElement('span');
-    tag.className = 'break-row__tag';
-    tag.setAttribute('aria-hidden', 'true');
-    tag.textContent = '// DESCANSO';
-    label.append(tag);
-    breakRow.append(label);
+    const pill = document.createElement('span');
+    pill.className = 'break-pill';
+    pill.textContent = `Recreo · ${formatTime(BREAK.start)} – ${formatTime(BREAK.end)}`;
+    const extra = document.createElement('span');
+    extra.className = 'break-extra';
+    extra.setAttribute('aria-hidden', 'true');
+    extra.textContent = '// DESCANSO';
+    pill.append(extra);
+    breakRow.append(pill);
     add(breakRow, BREAK.afterSlot + 1 + HEADER_ROWS);
   }
 

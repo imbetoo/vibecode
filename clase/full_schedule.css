@@ -112,11 +112,15 @@ body {
   transform: translateY(-0.06em);
 }
 
-.clock-part.tick { animation: clock-tick 0.18s var(--ease); }
+.clock-part.tick { animation: clock-tick 0.3s var(--ease); }
 
+/* Flip suave: el dígito nuevo cae girando un poco sobre el eje X. La
+   perspectiva va dentro del transform para que cada bloque tenga su propio
+   punto de fuga (con perspective en el padre, los segundos, a la derecha,
+   se torcerían hacia el centro). */
 @keyframes clock-tick {
-  from { opacity: 0.5; transform: translateY(4px) scale(0.95); }
-  to   { opacity: 1;   transform: translateY(0) scale(1); }
+  0%   { opacity: 0; transform: perspective(150px) translateY(6px) rotateX(-30deg); }
+  100% { opacity: 1; transform: perspective(150px) translateY(0) rotateX(0); }
 }
 
 .header-countdown {
@@ -267,31 +271,49 @@ body {
   background: var(--glass-border);
 }
 
-.break-row__label {
+/* Pastilla del recreo: en hover se rellena de cristal y se abre hacia los
+   lados mostrando "// DESCANSO"; las líneas (flex: 1) ceden el espacio. */
+.break-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 16px;
   white-space: nowrap;
-  transition: color var(--t-hover) var(--ease);
+  border-radius: 999px;
+  border: 1px solid transparent;
+  transition:
+    background var(--t-hover) var(--ease),
+    border-color var(--t-hover) var(--ease),
+    box-shadow var(--t-hover) var(--ease),
+    color var(--t-hover) var(--ease);
 }
 
-/* Etiqueta oculta que entra deslizándose al pasar el ratón (opacity + transform). */
-.break-row__tag {
-  display: inline-block;
-  margin-left: 10px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 0.02em;
-  color: var(--accent);
+/* El hueco va en margin-left (no en gap): cerrada no ocupa nada y el
+   texto queda centrado entre las líneas. */
+.break-extra {
+  max-width: 0;
+  margin-left: 0;
   opacity: 0;
-  transform: translateX(-10px);
-  transition: opacity var(--t-hover) var(--ease), transform var(--t-hover) var(--ease);
-  will-change: transform, opacity;
+  overflow: hidden;
+  white-space: nowrap;
+  font-weight: 700;
+  color: var(--text-soft);
+  transition:
+    max-width var(--t-hover) var(--ease),
+    margin-left var(--t-hover) var(--ease),
+    opacity var(--t-hover) var(--ease);
 }
 
-.break-row:hover .break-row__label { color: var(--text); }
+.break-row:hover .break-pill {
+  color: var(--text);
+  background: var(--glass);
+  border-color: var(--glass-border);
+  box-shadow: 0 4px 12px var(--shadow);
+}
 
-.break-row:hover .break-row__tag {
+.break-row:hover .break-extra {
+  max-width: 120px;
+  margin-left: 6px;
   opacity: 1;
-  transform: translateX(0);
 }
 
 .empty-cell {

@@ -10,9 +10,9 @@ Extensión Manifest V3 (Chrome/Brave) con tu horario de clase.
 - **Horas**: al pasar el ratón por una hora se ve su estado en vivo: *Ya pasó* (✓), los minutos que quedan si está en curso, o cuánto falta para que empiece (*En 12 min*, *En 2 h*, *En 3 d*).
 - **Tema claro/oscuro**: botón de sol/luna en la barra del horario. La preferencia se guarda en `localStorage` y la comparte el horario completo.
 - **Horario completo**: el botón de expandir abre `full_schedule.html` en una pestaña nueva con la semana entera en una cuadrícula. Al pasar el ratón por un día se ve su número; por una asignatura de la leyenda, el profesor y los periodos semanales (y cuántos quedan esta semana).
-  - **Reloj**: arriba a la derecha, la hora en vivo (`HH:MM:SS`, cada bloque se anima por separado al cambiar) y cuánto queda para el fin de las clases de hoy (*Quedan 1 hora y 46 minutos.*). El fin se calcula con la última clase del día en `WEEK` (15:20 los jueves, 14:30 el resto).
+  - **Reloj**: arriba a la derecha, la hora en vivo (`HH:MM:SS`, cada bloque hace un flip suave por separado al cambiar) y cuánto queda para el fin de las clases de hoy (*Quedan 1 hora y 46 minutos.*). El fin se calcula con la última clase del día en `WEEK` (15:20 los jueves, 14:30 el resto).
   - **Tareas de Moodle**: cada bloque muestra en amarillo cuántas tareas pendientes tiene su asignatura. Una tarea se asigna a la asignatura cuyo código (`csdawBD`…) aparece en su `CATEGORIES` o en su título. Las tareas que vencen un día aparecen en los huecos libres del final de ese día (si no caben, el último hueco dice *N tareas más*). Marcar tareas en el popup lo actualiza al momento.
-  - **Recreo**: al pasar el ratón, el texto se ilumina y entra deslizándose la etiqueta `// DESCANSO`.
+  - **Recreo**: al pasar el ratón, el texto se convierte en una pastilla de cristal que se abre mostrando `// DESCANSO`, sin romper las líneas laterales.
 
 ## Instalar
 
