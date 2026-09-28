@@ -16,6 +16,11 @@ async function readCompleted() {
   return new Set(Array.isArray(list) ? list : []);
 }
 
+/** Guarda los UIDs completados (misma clave y formato en el popup y el horario). */
+function writeCompleted(set) {
+  return chrome.storage.sync.set({ [DONE_KEY]: [...set] });
+}
+
 /** Parsea el .ics en un Web Worker para no bloquear el hilo principal. */
 function parseInWorker(text) {
   return new Promise((resolve, reject) => {

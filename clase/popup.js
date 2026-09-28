@@ -437,7 +437,7 @@
 
   async function saveCompleted() {
     try {
-      await chrome.storage.sync.set({ [DONE_KEY]: [...completed] });
+      await writeCompleted(completed);
     } catch (error) {
       setTasksStatus(`No se pudo sincronizar (${error.message})`, true);
     }

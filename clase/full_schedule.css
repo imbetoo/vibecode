@@ -403,14 +403,64 @@ body {
   color: rgba(245, 245, 247, 0.6);
 }
 
+/* Casilla estilo iOS: al marcarla se rellena de verde con un check blanco
+   (pseudo-elemento) y hace un pequeño "pop". */
 .task-in-slot__check {
+  appearance: none;
   flex: none;
+  display: grid;
+  place-content: center;
   width: 20px;
   height: 20px;
+  margin: 0;
   border-radius: 6px;
   border: 1.5px solid rgba(255, 255, 255, 0.45);
   background: rgba(255, 255, 255, 0.12);
+  cursor: pointer;
+  transition:
+    background-color var(--t-hover) var(--ease),
+    border-color var(--t-hover) var(--ease);
 }
+
+.task-in-slot__check::after {
+  content: "";
+  width: 9px;
+  height: 5px;
+  margin-top: -2px;
+  border: solid #fff;
+  border-width: 0 0 2px 2px;
+  transform: rotate(-45deg) scale(0);
+  transition: transform 0.25s var(--ease);
+}
+
+.task-in-slot__check:hover { border-color: rgba(255, 255, 255, 0.75); }
+
+.task-in-slot__check:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.task-in-slot.is-completed .task-in-slot__check {
+  border-color: transparent;
+  background: #34c759;
+}
+
+.task-in-slot.is-completed .task-in-slot__check::after { transform: rotate(-45deg) scale(1); }
+
+.task-in-slot__check.is-popping { animation: check-pop 0.3s var(--ease); }
+
+@keyframes check-pop {
+  0%   { transform: scale(1); }
+  50%  { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+
+/* Completada: se atenúa y se tacha. La casilla verde no se atenúa (igual que
+   en el popup), para que el "hecho" se siga leyendo claro. */
+.task-in-slot__body { transition: opacity var(--t-hover) var(--ease); }
+
+.task-in-slot.is-completed .task-in-slot__body { opacity: 0.3; }
+.task-in-slot.is-completed .task-in-slot__title { text-decoration: line-through; }
 
 /* ---------- Bloques de asignatura ---------- */
 

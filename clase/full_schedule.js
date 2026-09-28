@@ -196,10 +196,14 @@
     if (el.textContent !== text) el.textContent = text;
   }
 
-  /** Mete (o quita) una tarea en un hueco libre; el bloque se crea una sola vez. */
-  function setSlotTask(cell, title, meta, tooltip) {
+  /**
+   * Mete (o quita) una tarea en un hueco libre. El bloque se crea una sola vez
+   * por hueco; después solo cambian textos, `data-uid`, `checked` y clases.
+   * `uid` null = bloque resumen ("N tareas más"), sin casilla.
+   */
+  function setSlotTask(cell, task) {
     let slot = cell.querySelector('.task-in-slot');
-    if (!title) {
+    if (!task) {
       if (slot) slot.hidden = true;
       cell.classList.remove('has-task');
       return;
@@ -208,18 +212,49 @@
       slot = div('task-in-slot');
       const body = div('task-in-slot__body');
       body.append(div('task-in-slot__title'), div('task-in-slot__meta'));
-      const check = document.createElement('span');
+      const check = document.createElement('input');
+      check.type = 'checkbox';
       check.className = 'task-in-slot__check';
-      check.setAttribute('aria-hidden', 'true');
+      check.addEventListener('animationend', () => check.classList.remove('is-popping'));
       slot.append(body, check);
       cell.append(slot);
     }
-    setText(slot.querySelector('.task-in-slot__title'), title);
-    setText(slot.querySelector('.task-in-slot__meta'), meta);
-    slot.title = tooltip;
+    const check = slot.querySelector('.task-in-slot__check');
+    setText(slot.querySelector('.task-in-slot__title'), task.title);
+    setText(slot.querySelector('.task-in-slot__meta'), task.meta);
+    slot.title = task.tooltip;
+    if (task.uid) {
+      if (slot.dataset.uid !== task.uid) slot.dataset.uid = task.uid;
+      check.setAttribute('aria-label', `Marcar como hecha: ${task.title}`);
+    } else {
+      delete slot.dataset.uid;
+    }
+    check.hidden = !task.uid;
+    if (check.checked !== task.done) check.checked = task.done;
+    slot.classList.toggle('is-completed', task.done);
     slot.hidden = false;
     cell.classList.add('has-task');
   }
+
+  // Casillas de los huecos: un solo listener (delegación). Marcar aquí guarda
+  // en chrome.storage.sync con la misma clave y formato que el popup, así que
+  // el popup y los demás ordenadores lo ven al momento.
+  grid.addEventListener('change', event => {
+    const check = event.target;
+    if (!check.matches('.task-in-slot__check')) return;
+    const slot = check.closest('.task-in-slot');
+    const uid = slot.dataset.uid;
+    if (!uid) return;
+    if (check.checked) {
+      completed.add(uid);
+      check.classList.add('is-popping'); // "pop" solo al marcar a mano
+    } else {
+      completed.delete(uid);
+    }
+    slot.classList.toggle('is-completed', check.checked);
+    applyTasks(); // contadores amarillos
+    writeCompleted(completed).catch(() => {});
+  });
 
   let upcoming = [];
   let completed = new Set();
@@ -248,20 +283,31 @@
       if (el.hidden !== !n) el.hidden = !n;
     }
 
-    // Huecos del final de cada día: las tareas que vencen ese día.
+    // Huecos del final de cada día: las tareas que vencen ese día, también las
+    // hechas (atenuadas y marcadas), para poder desmarcarlas desde aquí.
     WEEK.forEach((day, i) => {
       const cells = trailingCells[i];
-      const due = pending.filter(event => sameDay(event.start, dates[i]));
+      const due = upcoming.filter(event => sameDay(event.start, dates[i]));
       cells.forEach((cell, k) => {
         const event = due[k];
         if (!event) return setSlotTask(cell, null);
         const overflow = due.length - cells.length;
         if (k === cells.length - 1 && overflow > 0) {
-          return setSlotTask(cell, `${overflow + 1} tareas más`, `${day.name} · desde ${timeText(event)}`,
-            due.slice(k).map(e => e.summary).join('\n'));
+          return setSlotTask(cell, {
+            uid: null,
+            done: false,
+            title: `${overflow + 1} tareas más`,
+            meta: `${day.name} · desde ${timeText(event)}`,
+            tooltip: due.slice(k).map(e => e.summary).join('\n')
+          });
         }
-        setSlotTask(cell, event.summary, `${day.name} ${timeText(event)}`,
-          `${event.summary}\n${event.start.toLocaleString('es-ES')}`);
+        setSlotTask(cell, {
+          uid: event.uid,
+          done: completed.has(event.uid),
+          title: event.summary,
+          meta: `${day.name} ${timeText(event)}`,
+          tooltip: `${event.summary}\n${event.start.toLocaleString('es-ES')}`
+        });
       });
     });
   }
