@@ -11,7 +11,6 @@
 }
 
 body {
-  --bg: #eef0f3 url("bg-waves.svg") center / 100% 100% no-repeat;
   --text: #1d1d1f;
   --text-soft: rgba(29, 29, 31, 0.58);
   --icon: #333333;
@@ -31,7 +30,6 @@ body {
 }
 
 body.dark-theme {
-  --bg: #1f1f23 url("bg-waves-dark.svg") center / 100% 100% no-repeat;
   --text: #f5f5f7;
   --text-soft: rgba(245, 245, 247, 0.6);
   --icon: #e5e5ea;
@@ -69,8 +67,25 @@ body {
   font-family: var(--font);
   color: var(--text);
   -webkit-font-smoothing: antialiased;
-  background: var(--bg);
+  /* Fondo claro fijo; el oscuro es una capa encima (.app::before). */
+  background: #eef0f3 url("bg-waves.svg") center / 100% 100% no-repeat;
   border-radius: var(--radius-app);
+}
+
+/* ---------- Cambio de tema suave ----------
+ * theme.js pone .theme-transition en el body solo durante el cambio (300 ms).
+ * El fondo (imagen) no admite transición de color: se funde aparte con una
+ * capa oscura que solo cambia de opacidad.
+ */
+.theme-transition,
+.theme-transition *,
+.theme-transition *::before,
+.theme-transition *::after {
+  transition:
+    background-color 0.3s ease,
+    border-color 0.3s ease,
+    color 0.3s ease,
+    box-shadow 0.3s ease !important;
 }
 
 button {
@@ -97,6 +112,20 @@ button:focus-visible {
   border-radius: var(--radius-app);
   box-shadow: inset 0 0 0 1px var(--app-edge);
 }
+
+/* Fondo oscuro como capa: al cambiar de tema solo cambia su opacidad y las
+   ondas se funden en vez de saltar. Va debajo de las vistas (posicionadas). */
+.app::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: #1f1f23 url("bg-waves-dark.svg") center / 100% 100% no-repeat;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+.dark-theme .app::before { opacity: 1; }
 
 .view {
   position: absolute;
@@ -726,18 +755,68 @@ button:focus-visible {
 
 /* Lista de eventos */
 
+/* Alto de una tarea: 10 + 46 (fecha) + 10 de padding + 1 de borde. */
+.view--tasks { --task-h: 67px; }
+
 .tasks-list {
   /* flex en columna para poder mandar las completadas al fondo con `order`. */
   display: flex;
   flex-direction: column;
-  flex: 1;
-  min-height: 0;
+  flex: none;
+  /* Caben exactamente 4 tareas; el resto, con scroll interno. */
+  height: calc(var(--task-h) * 4);
   margin: 0 -6px;
-  padding: 0 6px 12px;
+  padding: 0 6px;
   list-style: none;
   overflow-y: auto;
-  scrollbar-width: thin;
 }
+
+.task { flex: none; }
+
+/* Si hay más por debajo, la última tarea visible se desvanece. */
+.tasks-list.has-more {
+  -webkit-mask-image: linear-gradient(to bottom, #000 85%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 85%, transparent 100%);
+}
+
+/* Barra de scroll finísima estilo macOS: invisible hasta pasar por la lista. */
+.tasks-list::-webkit-scrollbar { width: 6px; }
+.tasks-list::-webkit-scrollbar-track { background: transparent; }
+
+.tasks-list::-webkit-scrollbar-thumb {
+  border-radius: 3px;
+  background: transparent;
+}
+
+.tasks-list:hover::-webkit-scrollbar-thumb { background: var(--dashed); }
+
+/* Botones fijos bajo la lista. */
+.custom-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 12px;
+  height: var(--task-h);
+}
+
+.action-btn {
+  flex: 1 1 50%;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--icon);
+  border-radius: 12px; /* como la fecha de cada tarea */
+  background: var(--control);
+  border: 1px solid var(--glass-border);
+  transition: background var(--t-hover) var(--ease), transform var(--t-hover) var(--ease);
+}
+
+.action-btn:hover {
+  background: var(--control-hover);
+  transform: scale(1.02);
+}
+
+.action-btn:active { transform: scale(0.97); }
 
 .task {
   display: flex;

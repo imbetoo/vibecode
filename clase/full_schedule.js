@@ -93,6 +93,9 @@
   // rellenarlos cuando llegue el calendario de Moodle (sin reconstruir nada).
   const taskCounters = [];            // { code, el }
   const trailingCells = WEEK.map(() => []);
+  const floatingCards = WEEK.map(() => null);
+  const FLOATING_MAX = 3;
+  const floatingRow = row(slots[slots.length - 1].id) + 1; // fila extra bajo el horario
 
   WEEK.forEach((day, i) => {
     const col = dayColumn(i);
@@ -128,6 +131,22 @@
       const cell = add(div('empty-cell'), row(slot.id), null, col);
       if (slot.id > lastClass) trailingCells[i].push(cell);
     });
+
+    // Día lleno hasta el final (p. ej. el jueves): sin huecos libres, sus
+    // tareas van en tarjetas flotantes apiladas en una fila extra bajo su
+    // columna (hasta FLOATING_MAX; si hay más, la última resume el resto).
+    // Ocultas no ocupan sitio, así que la fila solo aparece si hace falta.
+    if (!trailingCells[i].length) {
+      const stack = add(div('floating-task'), floatingRow, null, col);
+      stack.hidden = true;
+      const cells = Array.from({ length: FLOATING_MAX }, () => {
+        const cell = div('floating-task__cell');
+        cell.hidden = true;
+        stack.append(cell);
+        return cell;
+      });
+      floatingCards[i] = { stack, cells };
+    }
   });
 
   grid.replaceChildren(fragment);
@@ -286,8 +305,10 @@
     // Huecos del final de cada día: las tareas que vencen ese día, también las
     // hechas (atenuadas y marcadas), para poder desmarcarlas desde aquí.
     WEEK.forEach((day, i) => {
-      const cells = trailingCells[i];
+      const floating = floatingCards[i];
       const due = upcoming.filter(event => sameDay(event.start, dates[i]));
+      // Tarjetas flotantes: tantas como tareas (hasta el máximo).
+      const cells = floating ? floating.cells.slice(0, Math.max(1, due.length)) : trailingCells[i];
       cells.forEach((cell, k) => {
         const event = due[k];
         if (!event) return setSlotTask(cell, null);
@@ -309,6 +330,14 @@
           tooltip: `${event.summary}\n${event.start.toLocaleString('es-ES')}`
         });
       });
+      if (floating) {
+        floating.cells.forEach(cell => {
+          const show = cell.classList.contains('has-task');
+          if (cell.hidden !== !show) cell.hidden = !show;
+        });
+        const show = due.length > 0;
+        if (floating.stack.hidden !== !show) floating.stack.hidden = !show;
+      }
     });
   }
 

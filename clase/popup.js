@@ -395,6 +395,17 @@
 
   const tasksSetup = document.getElementById('tasks-setup');
   const tasksList = document.getElementById('tasks-list');
+  const customActions = document.getElementById('custom-actions');
+
+  // Degradado inferior solo si queda algo por debajo (hay más de 4 tareas y
+  // no se ha llegado al final): solo alterna una clase, y solo si cambia.
+  function updateListFade() {
+    const more = tasksList.scrollHeight - tasksList.scrollTop - tasksList.clientHeight > 1;
+    if (tasksList.classList.contains('has-more') !== more) tasksList.classList.toggle('has-more', more);
+  }
+  tasksList.addEventListener('scroll', updateListFade, { passive: true });
+  new ResizeObserver(updateListFade).observe(tasksList);
+  new MutationObserver(updateListFade).observe(tasksList, { childList: true });
   const tasksStatus = document.getElementById('tasks-status');
   const tasksSettings = document.getElementById('tasks-settings');
   const icsInput = document.getElementById('ics-url');
@@ -417,6 +428,7 @@
   function showSetup(currentUrl = '') {
     tasksSetup.hidden = false;
     tasksList.hidden = true;
+    customActions.hidden = true;
     tasksSettings.hidden = true;
     icsInput.value = currentUrl;
     icsCancel.hidden = !currentUrl;
@@ -427,6 +439,7 @@
   function showList() {
     tasksSetup.hidden = true;
     tasksList.hidden = false;
+    customActions.hidden = false;
     tasksSettings.hidden = false;
   }
 
