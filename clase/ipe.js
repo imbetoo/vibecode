@@ -1,11 +1,11 @@
 /*
  * Tarea semanal de IPE, compartida por el popup y el service worker.
- * - Entrega: jueves a las 20:00.
- * - La siguiente tarea se abre el viernes a las 00:00 (jueves por la noche).
+ * - Entrega: viernes a las 20:00.
+ * - La siguiente tarea se abre el sábado a las 00:00 (viernes por la noche).
  * Todas las horas son locales.
  */
-const IPE_DEADLINE = { weekday: 4, hour: 20, minute: 0 }; // jueves 20:00
-const IPE_OPENING  = { weekday: 5, hour: 0,  minute: 0 }; // viernes 00:00
+const IPE_DEADLINE = { weekday: 5, hour: 20, minute: 0 }; // viernes 20:00
+const IPE_OPENING  = { weekday: 6, hour: 0,  minute: 0 }; // sábado 00:00
 
 /** Próxima fecha (estrictamente posterior a `now`) de un día/hora semanal. */
 function nextWeekly({ weekday, hour, minute }, now = new Date()) {
@@ -15,20 +15,20 @@ function nextWeekly({ weekday, hour, minute }, now = new Date()) {
   return candidate;
 }
 
-/** Próxima apertura de tarea (viernes 00:00). */
+/** Próxima apertura de tarea (sábado 00:00). */
 function nextIpeOpening(now = new Date()) {
   return nextWeekly(IPE_OPENING, now);
 }
 
-/** Última apertura ya ocurrida (viernes 00:00 anterior o igual a `now`). */
+/** Última apertura ya ocurrida (sábado 00:00 anterior o igual a `now`). */
 function lastIpeOpening(now = new Date()) {
   const next = nextIpeOpening(now);
   return new Date(next.getFullYear(), next.getMonth(), next.getDate() - 7, IPE_OPENING.hour, IPE_OPENING.minute);
 }
 
 /**
- * Estado de la tarea: entre la entrega del jueves y la apertura del viernes
- * se está esperando; el resto del tiempo, cuenta atrás hasta el jueves 20:00.
+ * Estado de la tarea: entre la entrega del viernes y la apertura del sábado
+ * se está esperando; el resto del tiempo, cuenta atrás hasta el viernes 20:00.
  * @returns {{waiting: true} | {waiting: false, deadline: Date, ms: number}}
  */
 function ipeStatus(now = new Date()) {
@@ -53,7 +53,7 @@ function ipeCountdownText(now = new Date()) {
 // Se guarda la fecha de entrega (ISO) de la tarea marcada como hecha.
 const IPE_DONE_KEY = 'ipeCompleted';
 
-/** Entrega (ISO) de la tarea abierta ahora, o null entre jueves 20:00 y viernes 00:00. */
+/** Entrega (ISO) de la tarea abierta ahora, o null entre viernes 20:00 y sábado 00:00. */
 function ipeCurrentDeadline(now = new Date()) {
   const status = ipeStatus(now);
   return status.waiting ? null : status.deadline.toISOString();

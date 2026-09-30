@@ -37,13 +37,13 @@
   function updateIPECountdown() {
     const text = ipeCountdownText();
     if (ipeText.textContent !== text) ipeText.textContent = text; // solo el texto, y solo si cambia
-    applyIpeDone(); // el jueves a las 20:00 la casilla caduca y se desmarca sola
+    applyIpeDone(); // el viernes a las 20:00 la casilla caduca y se desmarca sola
   }
 
   // ---------- Casilla "IPE entregada" ----------
-  // En chrome.storage.sync se guarda la entrega (jueves 20:00) de la tarea
+  // En chrome.storage.sync se guarda la entrega (viernes 20:00) de la tarea
   // marcada. Al pasar esa hora la marca caduca: se borra y la tarjeta vuelve
-  // a su sitio. Entre el jueves 20:00 y el viernes 00:00 no hay tarea.
+  // a su sitio. Entre el viernes 20:00 y el sábado 00:00 no hay tarea.
 
   const ipeCard = document.getElementById('ipe-card');
   const ipeCheck = document.getElementById('ipe-check');
@@ -74,7 +74,7 @@
   }
 
   /** Solo alterna clases, `checked` y `disabled`, y solo si cambian. */
-  function applyIpeDone({ animate = true } = {}) {
+  function applyIpeDone({ animate = true, delay = 0 } = {}) {
     if (ipeDoneExpired(ipeDoneFor)) {
       ipeDoneFor = '';
       chrome.storage.sync.remove(IPE_DONE_KEY).catch(() => {});
@@ -83,7 +83,7 @@
     const done = Boolean(deadline) && ipeDoneFor === deadline;
     if (ipeCheck.checked !== done) ipeCheck.checked = done;
     if (ipeCheck.disabled !== !deadline) ipeCheck.disabled = !deadline;
-    moveIpeCard(done, animate && currentView() === 'menu');
+    moveIpeCard(done, animate && currentView() === 'menu', delay);
   }
 
   // Cambio de sitio en tres tiempos: la tarjeta sale (se encoge y se
@@ -93,7 +93,7 @@
   let ipeTarget = null;     // estado al que va la tarjeta mientras sale
   let ipeTimer = 0;
 
-  function moveIpeCard(done, animate) {
+  function moveIpeCard(done, animate, delay = 0) {
     if (!animate) {
       clearTimeout(ipeTimer);
       ipeTimer = 0;
@@ -104,12 +104,16 @@
     ipeTarget = done;
     if (ipeTimer) return; // ya está saliendo: al terminar usará el último estado
     if (ipeCard.classList.contains('is-checked') === done) return;
-    ipeCard.classList.add('is-leaving');
+    // Primero se ve el check (delay), luego sale, cambia de sitio y entra.
     ipeTimer = setTimeout(() => {
-      ipeTimer = 0;
-      reorderMenu(() => ipeCard.classList.toggle('is-checked', ipeTarget));
-      ipeCard.classList.remove('is-leaving'); // entrada: vuelve a su escala y opacidad
-    }, IPE_LEAVE_MS);
+      if (ipeCard.classList.contains('is-checked') === ipeTarget) { ipeTimer = 0; return; }
+      ipeCard.classList.add('is-leaving');
+      ipeTimer = setTimeout(() => {
+        ipeTimer = 0;
+        reorderMenu(() => ipeCard.classList.toggle('is-checked', ipeTarget));
+        ipeCard.classList.remove('is-leaving'); // entrada: vuelve a su escala y opacidad
+      }, IPE_LEAVE_MS);
+    }, delay);
   }
 
   async function loadIpeDone() {
@@ -122,9 +126,12 @@
     applyIpeDone({ animate: false });
   }
 
+  ipeCheck.addEventListener('animationend', () => ipeCheck.classList.remove('is-popping'));
+
   ipeCheck.addEventListener('change', () => {
     ipeDoneFor = ipeCheck.checked ? ipeCurrentDeadline() || '' : '';
-    applyIpeDone();
+    if (ipeCheck.checked) ipeCheck.classList.add('is-popping');
+    applyIpeDone({ delay: ipeCheck.checked ? CHECK_SHOW_MS : 0 });
     chrome.storage.sync.set({ [IPE_DONE_KEY]: ipeDoneFor }).catch(() => {});
   });
 
@@ -572,9 +579,19 @@
   const TASK_ENTER_MS = 300;
   const taskTimers = new WeakMap();
 
-  function moveTask(li) {
+  // Al marcar, antes de salir se deja ver el relleno, el check y el "pop".
+  const CHECK_SHOW_MS = 350;
+
+  function moveTask(li, delay = 0) {
     clearTimeout(taskTimers.get(li));
     li.classList.remove('is-entering');
+    // Desmarcada antes de empezar a salir: ya está en su sitio, no se mueve.
+    const done = completed.has(li.dataset.uid);
+    if (!li.classList.contains('is-exiting') && li.classList.contains('task--completed') === done) return;
+    if (delay) {
+      taskTimers.set(li, setTimeout(() => moveTask(li), delay));
+      return;
+    }
     li.classList.add('is-exiting');
     taskTimers.set(li, setTimeout(() => {
       const others = [...tasksList.children].filter(item => item !== li);
@@ -589,14 +606,20 @@
     }, TASK_EXIT_MS));
   }
 
+  tasksList.addEventListener('animationend', event => event.target.classList.remove('is-popping'));
+
   // Un solo listener para todas las casillas (delegación de eventos).
   tasksList.addEventListener('change', event => {
     const check = event.target;
     if (!check.matches('.task__check')) return;
     const li = check.closest('.task');
-    if (check.checked) completed.add(li.dataset.uid);
-    else completed.delete(li.dataset.uid);
-    moveTask(li);
+    if (check.checked) {
+      completed.add(li.dataset.uid);
+      check.classList.add('is-popping');
+    } else {
+      completed.delete(li.dataset.uid);
+    }
+    moveTask(li, check.checked ? CHECK_SHOW_MS : 0);
     saveCompleted();
   });
 

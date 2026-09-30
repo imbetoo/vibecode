@@ -795,11 +795,11 @@ button:focus-visible {
   display: flex;
   gap: 12px;
   margin-top: 12px;
-  height: var(--task-h);
 }
 
 .action-btn {
   flex: 1 1 50%;
+  height: 38px; /* botón estándar de iOS, no el alto de una tarea */
   font-size: 13px;
   font-weight: 800;
   letter-spacing: 0.06em;
@@ -839,9 +839,10 @@ button:focus-visible {
   border: 2px solid var(--check-border);
   background: transparent;
   cursor: pointer;
-  transition: background-color var(--t-hover) var(--ease), border-color var(--t-hover) var(--ease);
+  transition: background-color 0.25s var(--ease), border-color 0.25s var(--ease);
 }
 
+/* El check entra con un pequeño rebote (curva con overshoot). */
 .task__check::after {
   content: "";
   width: 9px;
@@ -850,7 +851,16 @@ button:focus-visible {
   border: solid #fff;
   border-width: 0 0 2px 2px;
   transform: rotate(-45deg) scale(0);
-  transition: transform 0.2s var(--ease);
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* "Pop" al marcar a mano (lo pone popup.js; no salta al cargar la lista). */
+.task__check.is-popping { animation: check-pop 0.3s var(--ease); }
+
+@keyframes check-pop {
+  0%   { transform: scale(1); }
+  50%  { transform: scale(1.15); }
+  100% { transform: scale(1); }
 }
 
 .task__check:hover { border-color: #0a84ff; }
