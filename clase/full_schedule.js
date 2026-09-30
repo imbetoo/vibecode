@@ -341,26 +341,55 @@
     });
   }
 
-  async function loadTasks() {
-    try {
-      const url = await getIcsUrl();
-      if (!url) return;
-      const calendar = await fetchCalendar(url);
-      upcoming = calendar.upcoming;
-      completed = calendar.done;
-      applyTasks();
-    } catch {
-      // Sin enlace, sin red o fuera de la extensión: el horario sigue sin tareas.
-    }
+  // Moodle y propias por separado; `upcoming` es la unión, por fecha.
+  let moodleUpcoming = [];
+  let customItems = [];
+
+  function mergeUpcoming() {
+    upcoming = [...moodleUpcoming, ...upcomingCustomEvents(customItems)].sort((a, b) => a.start - b.start);
   }
 
-  // Si se marca una tarea en el popup (o en otro ordenador), se refleja aquí.
+  async function loadTasks() {
+    // Sin enlace, sin red o fuera de la extensión: lo que falle se queda vacío
+    // y el resto (p. ej. las tareas propias) se muestra igual.
+    const [calendar, customs] = await Promise.allSettled([
+      getIcsUrl().then(url => (url ? fetchCalendar(url) : null)),
+      readCustomItems()
+    ]);
+    customItems = customs.status === 'fulfilled' ? customs.value : [];
+    if (calendar.status === 'fulfilled' && calendar.value) {
+      moodleUpcoming = calendar.value.upcoming;
+      completed = calendar.value.done;
+    } else {
+      moodleUpcoming = [];
+      try {
+        completed = await readCompleted();
+      } catch {
+        completed = new Set();
+      }
+    }
+    mergeUpcoming();
+    applyTasks();
+  }
+
+  // Si se marca o se crea una tarea en el popup (o en otro ordenador), se
+  // refleja aquí.
   globalThis.chrome?.storage?.onChanged.addListener((changes, area) => {
-    if (area === 'sync' && changes[DONE_KEY]) {
-      completed = new Set(changes[DONE_KEY].newValue || []);
-      applyTasks();
+    if (area === 'sync') {
+      let dirty = false;
+      if (changes[DONE_KEY]) {
+        completed = new Set(changes[DONE_KEY].newValue || []);
+        dirty = true;
+      }
+      if (Object.values(CUSTOM_KEYS).some(key => changes[key])) {
+        customItems = mergeCustomChanges(customItems, changes);
+        mergeUpcoming();
+        dirty = true;
+      }
+      if (dirty) applyTasks();
     } else if (area === 'local' && changes[ICS_KEY]) {
-      upcoming = [];
+      moodleUpcoming = [];
+      mergeUpcoming();
       applyTasks();
       loadTasks();
     }

@@ -413,6 +413,129 @@
   tasksList.addEventListener('scroll', updateListFade, { passive: true });
   new ResizeObserver(updateListFade).observe(tasksList);
   new MutationObserver(updateListFade).observe(tasksList, { childList: true });
+
+  // ---------- Hoja inferior: nueva tarea / evento propio ----------
+
+  const sheet = document.getElementById('sheet');
+  const sheetBackdrop = document.getElementById('sheet-backdrop');
+  const sheetTitle = document.getElementById('sheet-title');
+  const sheetName = document.getElementById('sheet-name');
+  const sheetSubject = document.getElementById('sheet-subject');
+  const sheetDate = document.getElementById('sheet-date');
+  const sheetTime = document.getElementById('sheet-time');
+  const sheetDesc = document.getElementById('sheet-desc');
+  const sheetError = document.getElementById('sheet-error');
+  const sheetSubmit = document.getElementById('sheet-submit');
+
+  const SHEET_TEXT = {
+    task:  { title: 'Nueva tarea',  name: 'Nombre de la tarea', submit: '+ Añadir tarea' },
+    event: { title: 'Nuevo evento', name: 'Nombre del evento',  submit: '+ Añadir evento' }
+  };
+  const SHEET_MS = 450; // igual que la transición de .sheet en popup.css
+
+  let sheetKind = 'task';
+  let sheetOpener = null;
+  let sheetFocusTimer = 0;
+
+  // Asignaturas del select, una sola vez.
+  for (const [code, subject] of Object.entries(SUBJECTS)) {
+    sheetSubject.append(new Option(subject.name, code));
+  }
+
+  const pad2 = n => String(n).padStart(2, '0');
+  const isoDate = d => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+
+  const isSheetOpen = () => app.classList.contains('is-sheet-open');
+
+  function setSheetError(text) {
+    sheetError.textContent = text;
+    sheetError.hidden = !text;
+  }
+
+  function openSheet(kind, opener) {
+    const text = SHEET_TEXT[kind];
+    sheetKind = kind;
+    sheetOpener = opener;
+    sheet.reset();
+    sheetTitle.textContent = text.title;
+    sheetName.placeholder = text.name;
+    sheetSubmit.textContent = text.submit;
+    const today = isoDate(new Date());
+    sheetDate.value = today;
+    sheetDate.min = today;
+    sheetSubmit.disabled = false;
+    setSheetError('');
+
+    sheet.inert = false;
+    tasksView.inert = true; // la lista de detrás no recibe foco ni clics
+    app.classList.add('is-sheet-open');
+    // Foco al nombre sin que el navegador desplace nada mientras sube la hoja.
+    clearTimeout(sheetFocusTimer);
+    sheetFocusTimer = setTimeout(() => sheetName.focus({ preventScroll: true }), 200);
+  }
+
+  function closeSheet() {
+    if (!isSheetOpen()) return;
+    clearTimeout(sheetFocusTimer);
+    app.classList.remove('is-sheet-open'); // revierte hoja, zoom y desenfoque
+    sheet.inert = true;
+    if (currentView() === 'tasks') tasksView.inert = false;
+    sheetOpener?.focus({ preventScroll: true });
+  }
+
+  sheet.addEventListener('submit', async event => {
+    event.preventDefault();
+    if (sheetSubmit.disabled) return; // ya se está guardando
+
+    const title = sheetName.value.trim();
+    if (!title) {
+      setSheetError('Escribe un nombre');
+      sheetName.focus({ preventScroll: true });
+      return;
+    }
+    const item = {
+      uid: `custom-${crypto.randomUUID()}`,
+      title: title.slice(0, CUSTOM_LIMITS.title),
+      subject: sheetSubject.value,
+      date: sheetDate.value,
+      time: sheetTime.value,
+      description: sheetDesc.value.trim().slice(0, CUSTOM_LIMITS.description),
+      created: new Date().toISOString()
+    };
+    if (customToEvent(item).end < new Date()) {
+      setSheetError('Esa fecha ya ha pasado');
+      sheetDate.focus({ preventScroll: true });
+      return;
+    }
+
+    sheetSubmit.disabled = true;
+    setSheetError('');
+    try {
+      await addCustomItem(sheetKind, item);
+    } catch (error) {
+      // No se cierra: lo escrito sigue ahí para reintentar.
+      setSheetError(`No se pudo guardar (${error.message})`);
+      sheetSubmit.disabled = false;
+      return;
+    }
+
+    // Ya está en sync: se añade también en memoria y se repinta sin volver a
+    // descargar el .ics. (El onChanged que llegará después ya no cambia nada.)
+    customItems = mergeCustomChanges(customItems, {
+      [CUSTOM_KEYS[sheetKind]]: { newValue: [...customItems.filter(i => i.kind === sheetKind), item] }
+    });
+    justAddedUid = item.uid;
+    closeSheet();
+    // Si la lista aún estaba cargando, esa carga leyó las propias antes de
+    // guardar esta: se recarga para no perderla de vista.
+    if (listLoaded) renderAll();
+    else loadTasks();
+  });
+
+  document.getElementById('btn-add-task').addEventListener('click', event => openSheet('task', event.currentTarget));
+  document.getElementById('btn-add-event').addEventListener('click', event => openSheet('event', event.currentTarget));
+  sheet.querySelector('.js-sheet-close').addEventListener('click', closeSheet);
+  sheetBackdrop.addEventListener('click', closeSheet);
   const tasksStatus = document.getElementById('tasks-status');
   const tasksSettings = document.getElementById('tasks-settings');
   const icsInput = document.getElementById('ics-url');
@@ -480,6 +603,13 @@
 
   let loadSeq = 0;
 
+  // Lo último cargado, para volver a pintar sin descargar el .ics otra vez
+  // (al crear un elemento propio o al llegar un cambio de otro ordenador).
+  let moodleUpcoming = [];
+  let customItems = [];
+  let listLoaded = false;
+  let justAddedUid = null;
+
   async function loadTasks() {
     const seq = ++loadSeq;
     const url = await getIcsUrl();
@@ -491,25 +621,45 @@
     showList();
     setTasksStatus('Cargando…');
     tasksList.replaceChildren();
+    listLoaded = false;
 
-    let parsed, done;
-    try {
-      parsed = await fetchCalendar(url);
-      done = parsed.done;
-    } catch (error) {
-      if (seq === loadSeq) setTasksStatus(`No se pudo cargar (${error.message})`, true);
-      return;
-    }
+    // Si el .ics falla, las tareas propias se siguen mostrando.
+    const [calendar, customs] = await Promise.allSettled([fetchCalendar(url), readCustomItems()]);
     if (seq !== loadSeq) return; // hubo otra carga (o un cambio de enlace) mientras tanto
 
-    // Olvida las completadas que ya no están en el calendario: así la lista
-    // guardada no crece sin límite (sync admite 8 KB por clave).
-    const inFeed = new Set(parsed.uids);
-    completed = new Set([...done].filter(uid => inFeed.has(uid)));
-    if (completed.size !== done.size) saveCompleted();
+    customItems = customs.status === 'fulfilled' ? customs.value : [];
+    let done;
+    if (calendar.status === 'fulfilled') {
+      moodleUpcoming = calendar.value.upcoming;
+      done = calendar.value.done;
+      // Olvida las completadas que ya no están ni en el calendario ni entre
+      // las propias: así la lista guardada no crece sin límite (8 KB por clave).
+      const known = new Set([...calendar.value.uids, ...customItems.map(item => item.uid)]);
+      completed = new Set([...done].filter(uid => known.has(uid)));
+      if (completed.size !== done.size) saveCompleted();
+    } else {
+      moodleUpcoming = [];
+      try {
+        completed = await readCompleted();
+      } catch {
+        completed = new Set();
+      }
+      if (seq !== loadSeq) return;
+    }
 
     loadedAt = new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
-    renderTasks(parsed.upcoming);
+    listLoaded = true;
+    renderAll();
+    if (calendar.status === 'rejected') {
+      setTasksStatus(`No se pudo cargar (${calendar.reason.message})`, true);
+    }
+  }
+
+  /** Moodle + propias (las que no han pasado), por fecha. */
+  function renderAll() {
+    const events = [...moodleUpcoming, ...upcomingCustomEvents(customItems)]
+      .sort((a, b) => a.start - b.start);
+    renderTasks(events);
   }
 
   /** Pinta la lista una vez por carga; marcar tareas después no la reconstruye. */
@@ -526,7 +676,7 @@
     const now = new Date();
     const items = events.map(event => {
       const li = document.createElement('li');
-      li.className = 'task';
+      li.className = 'task' + (event.kind === 'event' ? ' task--event' : '');
       li.dataset.uid = event.uid;
 
       const check = document.createElement('input');
@@ -564,12 +714,21 @@
       when.textContent = minutes <= 0 ? 'Ahora' : formatUntil(minutes);
       when.classList.toggle('is-soon', minutes < 24 * 60);
 
-      li.title = `${event.summary}\n${event.start.toLocaleString('es-ES')}`;
+      li.title = [event.summary, event.start.toLocaleString('es-ES'), event.description].filter(Boolean).join('\n');
       li.append(check, date, body, when);
       return li;
     });
     tasksList.replaceChildren(...items);
     applyCompleted();
+
+    // El elemento recién creado entra con la misma animación que al moverse.
+    const added = justAddedUid && items.find(li => li.dataset.uid === justAddedUid);
+    justAddedUid = null;
+    if (added) {
+      added.classList.add('is-entering');
+      added.addEventListener('animationend', () => added.classList.remove('is-entering'), { once: true });
+      added.scrollIntoView({ block: 'nearest' });
+    }
   }
 
   // Al marcar, la tarea no se teletransporta: sale (.is-exiting, 200 ms),
@@ -635,6 +794,15 @@
       completed = new Set(changes[DONE_KEY].newValue || []);
       applyCompleted();
     }
+    if (Object.values(CUSTOM_KEYS).some(key => changes[key])) {
+      const next = mergeCustomChanges(customItems, changes);
+      // Si es el eco de lo que acabamos de guardar aquí, no se repinta (se
+      // cortaría la animación de entrada del elemento nuevo).
+      const key = items => JSON.stringify(items.map(i => i.uid).sort());
+      const changed = key(next) !== key(customItems);
+      customItems = next;
+      if (changed && listLoaded) renderAll();
+    }
   });
 
   tasksSetup.addEventListener('submit', async event => {
@@ -686,6 +854,13 @@
   nextButton.addEventListener('click', () => changeDay(1));
 
   document.addEventListener('keydown', event => {
+    if (isSheetOpen()) {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeSheet();
+      }
+      return; // con la hoja abierta, las teclas son para sus campos
+    }
     const view = currentView();
     if (view === 'tasks' && event.key === 'Escape') {
       event.preventDefault();

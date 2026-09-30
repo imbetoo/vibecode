@@ -168,10 +168,49 @@
       <ul id="tasks-list" class="tasks-list" hidden></ul>
 
       <div id="custom-actions" class="custom-actions" hidden>
-        <button id="add-task" class="action-btn" type="button" title="Añadir una tarea propia (próximamente)">+ Tarea</button>
-        <button id="add-event" class="action-btn" type="button" title="Añadir un evento propio (próximamente)">+ Evento</button>
+        <button id="btn-add-task" class="action-btn" type="button" title="Añadir una tarea propia">+ Tarea</button>
+        <button id="btn-add-event" class="action-btn" type="button" title="Añadir un evento propio">+ Evento</button>
       </div>
     </section>
+
+    <!-- Hoja inferior (bottom sheet) para crear tareas/eventos propios -->
+    <div id="sheet-backdrop" class="sheet-backdrop" aria-hidden="true"></div>
+    <form id="sheet" class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title" autocomplete="off" inert>
+      <span class="sheet__grabber" aria-hidden="true"></span>
+      <header class="sheet__header">
+        <h3 id="sheet-title" class="sheet__title">Nueva tarea</h3>
+        <button class="sheet__close js-sheet-close" type="button" title="Cerrar" aria-label="Cerrar">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </header>
+
+      <input id="sheet-name" class="sheet-field sheet-input" type="text" required maxlength="120" placeholder="Nombre de la tarea" aria-label="Nombre">
+
+      <div class="sheet-row">
+        <label class="sheet-field sheet-pill sheet-pill--select">
+          <span class="sheet-pill__icon" aria-hidden="true">📚</span>
+          <select id="sheet-subject" aria-label="Asignatura">
+            <option value="">Sin asignatura</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="sheet-row">
+        <label class="sheet-field sheet-pill">
+          <span class="sheet-pill__icon" aria-hidden="true">📅</span>
+          <input id="sheet-date" type="date" required aria-label="Fecha">
+        </label>
+        <label class="sheet-field sheet-pill">
+          <span class="sheet-pill__icon" aria-hidden="true">⏰</span>
+          <input id="sheet-time" type="time" aria-label="Hora (vacía: todo el día)">
+        </label>
+      </div>
+
+      <textarea id="sheet-desc" class="sheet-field sheet-textarea" rows="3" maxlength="300" placeholder="Descripción (opcional)" aria-label="Descripción"></textarea>
+
+      <p id="sheet-error" class="sheet-error" role="alert" hidden></p>
+      <button id="sheet-submit" class="sheet-submit" type="submit">+ Añadir tarea</button>
+    </form>
   </main>
 
   <script src="schedule-data.js"></script>

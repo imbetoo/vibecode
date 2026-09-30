@@ -219,6 +219,8 @@ const SUBJECT_MATCHERS = Object.entries(SUBJECTS).map(([code, subject]) => {
  * Si encajan varias, gana la coincidencia más larga.
  */
 function subjectOfEvent(event) {
+  // Tareas/eventos propios: la asignatura se eligió al crearlos.
+  if (event.subject && SUBJECTS[event.subject]) return event.subject;
   for (const text of [event.category, event.summary]) {
     const folded = foldText(text);
     if (!folded) continue;
