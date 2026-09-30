@@ -187,22 +187,23 @@
       <input id="sheet-name" class="sheet-field sheet-input" type="text" required maxlength="120" placeholder="Nombre de la tarea" aria-label="Nombre">
 
       <div class="sheet-row">
-        <label class="sheet-field sheet-pill sheet-pill--select">
-          <span class="sheet-pill__icon" aria-hidden="true">📚</span>
-          <select id="sheet-subject" aria-label="Asignatura">
-            <option value="">Sin asignatura</option>
-          </select>
-        </label>
+        <div id="subject-select" class="custom-select">
+          <button class="sheet-field custom-select-btn" type="button" aria-haspopup="listbox" aria-expanded="false" aria-controls="subject-menu">
+            <span class="sheet-pill__icon" aria-hidden="true">📚</span>
+            <span class="custom-select-value">Sin asignatura</span>
+          </button>
+          <div id="subject-menu" class="custom-select-menu" role="listbox" aria-label="Asignatura" inert></div>
+        </div>
       </div>
 
       <div class="sheet-row">
-        <label class="sheet-field sheet-pill">
+        <label class="sheet-pill">
           <span class="sheet-pill__icon" aria-hidden="true">📅</span>
-          <input id="sheet-date" type="date" required aria-label="Fecha">
+          <input id="sheet-date" class="sheet-datetime" type="date" required aria-label="Fecha">
         </label>
-        <label class="sheet-field sheet-pill">
+        <label class="sheet-pill">
           <span class="sheet-pill__icon" aria-hidden="true">⏰</span>
-          <input id="sheet-time" type="time" aria-label="Hora (vacía: todo el día)">
+          <input id="sheet-time" class="sheet-datetime" type="time" aria-label="Hora (vacía: todo el día)">
         </label>
       </div>
 

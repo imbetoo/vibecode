@@ -57,9 +57,13 @@ function customToEvent(item) {
   };
 }
 
-/** Pasado hace más de un día: se puede borrar del almacenamiento. */
+// Los que ya pasaron se siguen viendo (tachados) esta semana; después se
+// borran del almacenamiento al guardar otro.
+const CUSTOM_KEEP_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** Pasado hace más de CUSTOM_KEEP_MS: se puede borrar del almacenamiento. */
 function isCustomExpired(item, now = new Date()) {
-  return customToEvent(item).end < new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  return customToEvent(item).end < new Date(now.getTime() - CUSTOM_KEEP_MS);
 }
 
 /** Eventos propios que aún no han terminado (misma regla que upcomingEvents). */
@@ -67,11 +71,29 @@ function upcomingCustomEvents(items, now = new Date()) {
   return items.map(customToEvent).filter(event => event.end >= now);
 }
 
+/**
+ * Para la lista del popup: los que no han terminado y también los pasados
+ * recientes, marcados con `expired` (se pintan tachados al final).
+ */
+function listCustomEvents(items, now = new Date()) {
+  return items
+    .filter(item => !isCustomExpired(item, now))
+    .map(item => {
+      const event = customToEvent(item);
+      return { ...event, expired: event.end < now };
+    });
+}
+
+/** Sin UIDs repetidos (se queda el último): la lista nunca pinta dos veces lo mismo. */
+function dedupeByUid(items) {
+  return [...new Map(items.map(item => [item.uid, item])).values()];
+}
+
 /** Todos los elementos propios guardados, con su `kind`. */
 async function readCustomItems() {
   const data = await chrome.storage.sync.get(Object.values(CUSTOM_KEYS));
-  return Object.entries(CUSTOM_KEYS).flatMap(([kind, key]) =>
-    (Array.isArray(data[key]) ? data[key] : []).filter(isValidCustomItem).map(item => ({ ...item, kind })));
+  return dedupeByUid(Object.entries(CUSTOM_KEYS).flatMap(([kind, key]) =>
+    (Array.isArray(data[key]) ? data[key] : []).filter(isValidCustomItem).map(item => ({ ...item, kind }))));
 }
 
 /**
@@ -86,7 +108,7 @@ function mergeCustomChanges(items, changes) {
     next = next.filter(item => item.kind !== kind)
       .concat(list.filter(isValidCustomItem).map(item => ({ ...item, kind })));
   }
-  return next;
+  return dedupeByUid(next);
 }
 
 // Escrituras en cola: cada una lee el array recién guardado justo antes de

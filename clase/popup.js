@@ -420,7 +420,11 @@
   const sheetBackdrop = document.getElementById('sheet-backdrop');
   const sheetTitle = document.getElementById('sheet-title');
   const sheetName = document.getElementById('sheet-name');
-  const sheetSubject = document.getElementById('sheet-subject');
+  const subjectSelect = document.getElementById('subject-select');
+  const subjectButton = subjectSelect.querySelector('.custom-select-btn');
+  const subjectLabel = subjectSelect.querySelector('.custom-select-value');
+  const subjectMenu = subjectSelect.querySelector('.custom-select-menu');
+  let subjectValue = '';
   const sheetDate = document.getElementById('sheet-date');
   const sheetTime = document.getElementById('sheet-time');
   const sheetDesc = document.getElementById('sheet-desc');
@@ -437,10 +441,87 @@
   let sheetOpener = null;
   let sheetFocusTimer = 0;
 
-  // Asignaturas del select, una sola vez.
-  for (const [code, subject] of Object.entries(SUBJECTS)) {
-    sheetSubject.append(new Option(subject.name, code));
+  // ---------- Desplegable de asignaturas (sustituye al <select> nativo) ----------
+
+  // Opciones creadas una sola vez: "Sin asignatura" + SUBJECTS con su color.
+  [['', { name: 'Sin asignatura' }], ...Object.entries(SUBJECTS)].forEach(([code, subject]) => {
+    const option = document.createElement('button');
+    option.type = 'button';
+    option.className = 'custom-select-option';
+    option.setAttribute('role', 'option');
+    option.dataset.value = code;
+    const swatch = document.createElement('span');
+    swatch.className = 'custom-select-swatch';
+    if (subject.color) swatch.style.background = subject.color;
+    const name = document.createElement('span');
+    name.className = 'custom-select-name';
+    name.textContent = subject.name;
+    option.append(swatch, name);
+    subjectMenu.append(option);
+  });
+  const subjectOptions = [...subjectMenu.querySelectorAll('.custom-select-option')];
+
+  const isSubjectMenuOpen = () => subjectSelect.classList.contains('is-open');
+
+  function setSubject(code) {
+    subjectValue = code;
+    subjectLabel.textContent = code ? SUBJECTS[code].name : 'Sin asignatura';
+    subjectButton.classList.toggle('has-value', Boolean(code));
+    for (const option of subjectOptions) {
+      option.setAttribute('aria-selected', String(option.dataset.value === code));
+    }
   }
+
+  function openSubjectMenu() {
+    subjectSelect.classList.add('is-open');
+    subjectButton.setAttribute('aria-expanded', 'true');
+    subjectMenu.inert = false;
+    const current = subjectOptions.find(o => o.dataset.value === subjectValue) || subjectOptions[0];
+    current.focus({ preventScroll: true });
+    current.scrollIntoView({ block: 'nearest' });
+  }
+
+  function closeSubjectMenu({ focusButton = false } = {}) {
+    if (!isSubjectMenuOpen()) return;
+    subjectSelect.classList.remove('is-open');
+    subjectButton.setAttribute('aria-expanded', 'false');
+    subjectMenu.inert = true;
+    if (focusButton) subjectButton.focus({ preventScroll: true });
+  }
+
+  subjectButton.addEventListener('click', () => {
+    if (isSubjectMenuOpen()) closeSubjectMenu();
+    else openSubjectMenu();
+  });
+
+  subjectMenu.addEventListener('click', event => {
+    const option = event.target.closest('.custom-select-option');
+    if (!option) return;
+    setSubject(option.dataset.value);
+    closeSubjectMenu({ focusButton: true });
+  });
+
+  // Flechas para moverse por las opciones; Esc cierra solo el menú.
+  subjectMenu.addEventListener('keydown', event => {
+    const i = subjectOptions.indexOf(document.activeElement);
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      const next = subjectOptions[(i + (event.key === 'ArrowDown' ? 1 : -1) + subjectOptions.length) % subjectOptions.length];
+      next.focus({ preventScroll: true });
+      next.scrollIntoView({ block: 'nearest' });
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation(); // que no cierre también la hoja
+      closeSubjectMenu({ focusButton: true });
+    } else if (event.key === 'Tab') {
+      closeSubjectMenu();
+    }
+  });
+
+  // Clic fuera del desplegable: se cierra.
+  document.addEventListener('pointerdown', event => {
+    if (isSubjectMenuOpen() && !subjectSelect.contains(event.target)) closeSubjectMenu();
+  });
 
   const pad2 = n => String(n).padStart(2, '0');
   const isoDate = d => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
@@ -465,6 +546,8 @@
     sheetDate.min = today;
     sheetSubmit.disabled = false;
     setSheetError('');
+    setSubject('');
+    closeSubjectMenu();
 
     sheet.inert = false;
     tasksView.inert = true; // la lista de detrás no recibe foco ni clics
@@ -477,6 +560,7 @@
   function closeSheet() {
     if (!isSheetOpen()) return;
     clearTimeout(sheetFocusTimer);
+    closeSubjectMenu();
     app.classList.remove('is-sheet-open'); // revierte hoja, zoom y desenfoque
     sheet.inert = true;
     if (currentView() === 'tasks') tasksView.inert = false;
@@ -496,7 +580,7 @@
     const item = {
       uid: `custom-${crypto.randomUUID()}`,
       title: title.slice(0, CUSTOM_LIMITS.title),
-      subject: sheetSubject.value,
+      subject: subjectValue,
       date: sheetDate.value,
       time: sheetTime.value,
       description: sheetDesc.value.trim().slice(0, CUSTOM_LIMITS.description),
@@ -510,26 +594,24 @@
 
     sheetSubmit.disabled = true;
     setSheetError('');
+    // Una sola fuente de verdad: aquí solo se guarda. Quien actualiza la
+    // lista es chrome.storage.onChanged (más abajo), que en Chrome puede
+    // llegar incluso antes de que termine este await; si además se añadiera
+    // aquí a mano, el elemento saldría dos veces.
+    justAddedUid = item.uid; // lo recoge ese repintado para animar la entrada
     try {
       await addCustomItem(sheetKind, item);
     } catch (error) {
       // No se cierra: lo escrito sigue ahí para reintentar.
+      justAddedUid = null;
       setSheetError(`No se pudo guardar (${error.message})`);
       sheetSubmit.disabled = false;
       return;
     }
-
-    // Ya está en sync: se añade también en memoria y se repinta sin volver a
-    // descargar el .ics. (El onChanged que llegará después ya no cambia nada.)
-    customItems = mergeCustomChanges(customItems, {
-      [CUSTOM_KEYS[sheetKind]]: { newValue: [...customItems.filter(i => i.kind === sheetKind), item] }
-    });
-    justAddedUid = item.uid;
     closeSheet();
     // Si la lista aún estaba cargando, esa carga leyó las propias antes de
     // guardar esta: se recarga para no perderla de vista.
-    if (listLoaded) renderAll();
-    else loadTasks();
+    if (!listLoaded) loadTasks();
   });
 
   document.getElementById('btn-add-task').addEventListener('click', event => openSheet('task', event.currentTarget));
@@ -587,7 +669,7 @@
   }
 
   function updateTasksCount() {
-    const pending = tasksList.querySelectorAll('.task:not(.task--completed)').length;
+    const pending = tasksList.querySelectorAll('.task:not(.task--completed):not(.is-expired)').length;
     setTasksStatus(`${pending} ${pending === 1 ? 'pendiente' : 'pendientes'} · ${loadedAt}`);
   }
 
@@ -655,9 +737,13 @@
     }
   }
 
-  /** Moodle + propias (las que no han pasado), por fecha. */
+  /**
+   * Moodle + propias, por fecha. Las propias que ya pasaron no desaparecen:
+   * van tachadas al final (ver .is-expired). Siempre se pinta desde estos
+   * arrays, y renderTasks vacía la lista antes (replaceChildren).
+   */
   function renderAll() {
-    const events = [...moodleUpcoming, ...upcomingCustomEvents(customItems)]
+    const events = [...moodleUpcoming, ...listCustomEvents(customItems)]
       .sort((a, b) => a.start - b.start);
     renderTasks(events);
   }
@@ -676,7 +762,7 @@
     const now = new Date();
     const items = events.map(event => {
       const li = document.createElement('li');
-      li.className = 'task' + (event.kind === 'event' ? ' task--event' : '');
+      li.className = 'task' + (event.kind === 'event' ? ' task--event' : '') + (event.expired ? ' is-expired' : '');
       li.dataset.uid = event.uid;
 
       const check = document.createElement('input');
@@ -711,8 +797,8 @@
       const when = document.createElement('span');
       when.className = 'task__when';
       const minutes = Math.ceil((event.start - now) / 60000);
-      when.textContent = minutes <= 0 ? 'Ahora' : formatUntil(minutes);
-      when.classList.toggle('is-soon', minutes < 24 * 60);
+      when.textContent = event.expired ? 'Pasó' : minutes <= 0 ? 'Ahora' : formatUntil(minutes);
+      when.classList.toggle('is-soon', !event.expired && minutes < 24 * 60);
 
       li.title = [event.summary, event.start.toLocaleString('es-ES'), event.description].filter(Boolean).join('\n');
       li.append(check, date, body, when);
@@ -857,7 +943,9 @@
     if (isSheetOpen()) {
       if (event.key === 'Escape') {
         event.preventDefault();
-        closeSheet();
+        // Primero se cierra el desplegable si está abierto; luego, la hoja.
+        if (isSubjectMenuOpen()) closeSubjectMenu({ focusButton: true });
+        else closeSheet();
       }
       return; // con la hoja abierta, las teclas son para sus campos
     }
