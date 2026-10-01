@@ -197,14 +197,20 @@
       </div>
 
       <div class="sheet-row">
-        <label class="sheet-pill">
-          <span class="sheet-pill__icon" aria-hidden="true">📅</span>
-          <input id="sheet-date" class="sheet-datetime" type="date" required aria-label="Fecha">
-        </label>
-        <label class="sheet-pill">
-          <span class="sheet-pill__icon" aria-hidden="true">⏰</span>
-          <input id="sheet-time" class="sheet-datetime" type="time" aria-label="Hora (vacía: todo el día)">
-        </label>
+        <div id="date-picker" class="custom-select custom-date">
+          <button class="sheet-field custom-select-btn custom-date-btn has-value" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="date-menu" aria-label="Fecha">
+            <span class="sheet-pill__icon" aria-hidden="true">📅</span>
+            <span class="custom-select-value">Hoy</span>
+          </button>
+          <div id="date-menu" class="custom-select-menu custom-menu--up custom-date-menu" role="dialog" aria-label="Elegir fecha" inert></div>
+        </div>
+        <div id="time-picker" class="custom-select custom-time">
+          <button class="sheet-field custom-select-btn custom-time-btn" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="time-menu" aria-label="Hora">
+            <span class="sheet-pill__icon" aria-hidden="true">⏰</span>
+            <span class="custom-select-value">Todo el día</span>
+          </button>
+          <div id="time-menu" class="custom-select-menu custom-menu--up custom-time-menu" role="dialog" aria-label="Elegir hora" inert></div>
+        </div>
       </div>
 
       <textarea id="sheet-desc" class="sheet-field sheet-textarea" rows="3" maxlength="300" placeholder="Descripción (opcional)" aria-label="Descripción"></textarea>

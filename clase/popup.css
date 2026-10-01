@@ -854,7 +854,7 @@ button:focus-visible {
   border: 2px solid var(--check-border);
   background: transparent;
   cursor: pointer;
-  transition: all 0.2s var(--ease);
+  transition: all 0.3s var(--ease);
 }
 
 .task__check::after {
@@ -867,7 +867,7 @@ button:focus-visible {
   opacity: 0;
   /* rotate() dibuja el ✓ con dos bordes; la animación es la escala. */
   transform: rotate(-45deg) scale(0.5);
-  transition: all 0.2s var(--ease);
+  transition: all 0.3s var(--ease);
 }
 
 .task__check:hover { border-color: #0a84ff; }
@@ -910,6 +910,20 @@ button:focus-visible {
   from { opacity: 0; transform: scale(0.95); }
   to   { opacity: 1; transform: none; }
 }
+
+/* Mientras se marca (300 ms, antes de moverse): la casilla ya está llena
+   (:checked) y el texto se tacha y se atenúa al 50 %. Al desmarcar, al revés. */
+.task > :not(.task__check) { transition: opacity 0.3s var(--ease); }
+
+.task.is-completing > :not(.task__check) { opacity: 0.5; }
+
+.task.is-completing .task__title,
+.task.is-completing .task__meta { text-decoration: line-through; }
+
+.task.task--completed.is-uncompleting > :not(.task__check) { opacity: 1; }
+
+.task.task--completed.is-uncompleting .task__title,
+.task.task--completed.is-uncompleting .task__meta { text-decoration: none; }
 
 /* Completada: tachada, atenuada y al final de la lista. */
 .task--completed { order: 1; }
@@ -1262,75 +1276,173 @@ button:focus-visible {
   transform: rotate(-45deg);
 }
 
-/* ---------- Fecha y hora: píldoras propias sobre los inputs nativos ---------- */
+.sheet-pill__icon { flex: none; font-size: 15px; }
 
-.sheet-pill {
-  position: relative;
+/* Fecha y hora van a media anchura: menos hueco para la flecha. */
+.custom-date-btn,
+.custom-time-btn { padding-right: 30px; }
+
+.custom-date-btn::after,
+.custom-time-btn::after { right: 14px; }
+
+/* ---------- Fecha y hora: menús propios (misma base que el de asignatura) ----------
+ * Abren hacia arriba: la fila está abajo en la hoja y hacia abajo se
+ * cortarían con el borde del popup.
+ */
+.custom-menu--up {
+  top: auto;
+  bottom: calc(100% + 6px);
+  transform: translateY(4px) scale(0.97);
+  transform-origin: bottom center;
+}
+
+.custom-date-menu {
+  right: auto;
+  width: 252px;
+  max-height: none;
+  padding: 10px;
+  overflow: visible;
+}
+
+.custom-time-menu {
+  left: auto;
+  width: 168px;
+  max-height: none;
+  padding: 8px;
+  overflow: visible;
+}
+
+/* Calendario */
+.cal-header {
   display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.cal-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--menu-text);
+}
+
+.cal-nav {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1;
+  color: #0a84ff;
+  border-radius: 50%;
+  transition: background-color 0.15s var(--ease), opacity 0.15s var(--ease);
+}
+
+.cal-nav:hover:not(:disabled),
+.cal-nav:focus-visible { background: var(--menu-hover); outline: none; }
+.cal-nav:disabled { opacity: 0.3; cursor: default; }
+
+.cal-weekdays,
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.cal-weekdays span {
+  padding: 2px 0 4px;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+  color: var(--menu-soft);
+}
+
+.cal-day {
+  height: 31px;
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--menu-text);
+  border-radius: 50%;
+  transition: background-color 0.15s var(--ease), color 0.15s var(--ease);
+}
+
+.cal-day:hover:not(:disabled),
+.cal-day:focus-visible { background: var(--menu-hover); outline: none; }
+
+.cal-day.is-today { color: #0a84ff; font-weight: 800; }
+
+.cal-day[aria-pressed="true"],
+.cal-day[aria-pressed="true"]:hover {
+  color: #fff;
+  background: #0a84ff;
+}
+
+.cal-day:disabled { cursor: default; }
+.cal-day:disabled:not(.is-blank) { opacity: 0.3; }
+
+/* Hora */
+.time-allday,
+.time-option {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--menu-text);
+  border-radius: 8px;
+  transition: background-color 0.15s var(--ease), color 0.15s var(--ease);
+}
+
+.time-allday {
+  height: 32px;
+  margin-bottom: 6px;
+}
+
+.time-cols {
+  display: flex;
+  gap: 6px;
+}
+
+.time-col {
+  display: flex;
+  flex-direction: column;
   flex: 1;
   min-width: 0;
 }
 
-/* El emoji va dentro de la píldora pero no captura clics. */
-.sheet-pill__icon {
+.time-col__head {
+  padding: 2px 0 4px;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+  color: var(--menu-soft);
+}
+
+.time-col__list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  height: 164px;
+  overflow-y: auto;
+  scrollbar-width: none; /* columnas con scroll, sin barra (como los pickers de iOS) */
+}
+
+.time-option {
   flex: none;
-  font-size: 15px;
+  height: 30px;
+  font-variant-numeric: tabular-nums;
 }
 
-.sheet-pill > .sheet-pill__icon {
-  position: absolute;
-  left: 14px;
-  top: 50%;
-  z-index: 1;
-  transform: translateY(-50%);
-  pointer-events: none;
+.time-allday:hover,
+.time-allday:focus-visible,
+.time-option:hover,
+.time-option:focus-visible { background: var(--menu-hover); outline: none; }
+
+.time-allday[aria-pressed="true"],
+.time-option[aria-pressed="true"],
+.time-option[aria-pressed="true"]:hover {
+  color: #fff;
+  background: #0a84ff;
 }
-
-.sheet-datetime {
-  -webkit-appearance: none;
-  appearance: none;
-  position: relative;
-  width: 100%;
-  min-width: 0;
-  height: 44px;
-  padding: 8px 16px 8px 40px;
-  font-family: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  color: inherit;
-  border: none;
-  border-radius: 999px;
-  background: var(--control);
-  outline: none;
-  cursor: pointer;
-  transition: background-color var(--t-hover) var(--ease), box-shadow var(--t-hover) var(--ease);
-}
-
-.sheet-datetime:hover { background: var(--control-hover); }
-
-.sheet-datetime:focus {
-  background: var(--control-hover);
-  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.3);
-}
-
-/* El icono nativo de Chrome, invisible y estirado sobre toda la píldora:
-   se pulse donde se pulse, se abre el selector del sistema. */
-.sheet-datetime::-webkit-calendar-picker-indicator {
-  opacity: 0;
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  width: 100%;
-  height: 100%;
-  margin: 0;
-  padding: 0;
-  cursor: pointer;
-}
-
-.sheet-datetime::-webkit-datetime-edit { padding: 0; }
-.sheet-datetime::-webkit-datetime-edit-fields-wrapper { padding: 0; }
 
 /* Descripción: la barra de scroll no aparece hasta que se usa el campo. */
 .sheet-textarea {

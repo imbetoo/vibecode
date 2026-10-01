@@ -420,13 +420,6 @@
   const sheetBackdrop = document.getElementById('sheet-backdrop');
   const sheetTitle = document.getElementById('sheet-title');
   const sheetName = document.getElementById('sheet-name');
-  const subjectSelect = document.getElementById('subject-select');
-  const subjectButton = subjectSelect.querySelector('.custom-select-btn');
-  const subjectLabel = subjectSelect.querySelector('.custom-select-value');
-  const subjectMenu = subjectSelect.querySelector('.custom-select-menu');
-  let subjectValue = '';
-  const sheetDate = document.getElementById('sheet-date');
-  const sheetTime = document.getElementById('sheet-time');
   const sheetDesc = document.getElementById('sheet-desc');
   const sheetError = document.getElementById('sheet-error');
   const sheetSubmit = document.getElementById('sheet-submit');
@@ -435,13 +428,81 @@
     task:  { title: 'Nueva tarea',  name: 'Nombre de la tarea', submit: '+ Añadir tarea' },
     event: { title: 'Nuevo evento', name: 'Nombre del evento',  submit: '+ Añadir evento' }
   };
-  const SHEET_MS = 450; // igual que la transición de .sheet en popup.css
 
   let sheetKind = 'task';
   let sheetOpener = null;
   let sheetFocusTimer = 0;
 
-  // ---------- Desplegable de asignaturas (sustituye al <select> nativo) ----------
+  const pad2 = n => String(n).padStart(2, '0');
+  const isoDate = d => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+  const parseIso = iso => {
+    const [y, m, d] = iso.split('-').map(Number);
+    return new Date(y, m - 1, d);
+  };
+
+  /** Pone el scroll de una columna para que `item` quede centrado (sin scrollIntoView,
+      que también desplazaría la hoja y el popup). */
+  function centerInColumn(column, item) {
+    column.scrollTop = item.offsetTop - (column.clientHeight - item.offsetHeight) / 2;
+  }
+
+  // ---------- Menús desplegables propios (asignatura, fecha, hora) ----------
+  // Todos comparten la misma lógica: botón + menú flotante, uno abierto como
+  // mucho, se cierran con un clic fuera o con Esc (que no cierra la hoja).
+
+  const popovers = [];
+
+  function createPopover(root, { onOpen } = {}) {
+    const button = root.querySelector('.custom-select-btn');
+    const menu = root.querySelector('.custom-select-menu');
+    const popover = {
+      root,
+      button,
+      isOpen: () => root.classList.contains('is-open'),
+      open() {
+        popovers.forEach(other => other !== popover && other.close());
+        onOpen?.(); // construye/actualiza el contenido y pone el foco dentro
+        root.classList.add('is-open');
+        button.setAttribute('aria-expanded', 'true');
+        menu.inert = false;
+        popover.focusInitial?.();
+      },
+      close({ focusButton = false } = {}) {
+        if (!popover.isOpen()) return;
+        root.classList.remove('is-open');
+        button.setAttribute('aria-expanded', 'false');
+        menu.inert = true;
+        if (focusButton) button.focus({ preventScroll: true });
+      }
+    };
+    button.addEventListener('click', () => (popover.isOpen() ? popover.close() : popover.open()));
+    menu.addEventListener('keydown', event => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation(); // que no cierre también la hoja
+        popover.close({ focusButton: true });
+      }
+    });
+    popovers.push(popover);
+    return popover;
+  }
+
+  const openPopover = () => popovers.find(popover => popover.isOpen());
+  const closePopovers = () => popovers.forEach(popover => popover.close());
+
+  // Clic fuera de un menú abierto: se cierra.
+  document.addEventListener('pointerdown', event => {
+    for (const popover of popovers) {
+      if (popover.isOpen() && !popover.root.contains(event.target)) popover.close();
+    }
+  });
+
+  // ---------- Asignatura ----------
+
+  const subjectSelect = document.getElementById('subject-select');
+  const subjectLabel = subjectSelect.querySelector('.custom-select-value');
+  const subjectMenu = subjectSelect.querySelector('.custom-select-menu');
+  let subjectValue = '';
 
   // Opciones creadas una sola vez: "Sin asignatura" + SUBJECTS con su color.
   [['', { name: 'Sin asignatura' }], ...Object.entries(SUBJECTS)].forEach(([code, subject]) => {
@@ -461,70 +522,231 @@
   });
   const subjectOptions = [...subjectMenu.querySelectorAll('.custom-select-option')];
 
-  const isSubjectMenuOpen = () => subjectSelect.classList.contains('is-open');
+  const subjectPopover = createPopover(subjectSelect);
+  subjectPopover.focusInitial = () => {
+    const current = subjectOptions.find(o => o.dataset.value === subjectValue) || subjectOptions[0];
+    centerInColumn(subjectMenu, current);
+    current.focus({ preventScroll: true });
+  };
 
   function setSubject(code) {
     subjectValue = code;
     subjectLabel.textContent = code ? SUBJECTS[code].name : 'Sin asignatura';
-    subjectButton.classList.toggle('has-value', Boolean(code));
+    subjectPopover.button.classList.toggle('has-value', Boolean(code));
     for (const option of subjectOptions) {
       option.setAttribute('aria-selected', String(option.dataset.value === code));
     }
   }
 
-  function openSubjectMenu() {
-    subjectSelect.classList.add('is-open');
-    subjectButton.setAttribute('aria-expanded', 'true');
-    subjectMenu.inert = false;
-    const current = subjectOptions.find(o => o.dataset.value === subjectValue) || subjectOptions[0];
-    current.focus({ preventScroll: true });
-    current.scrollIntoView({ block: 'nearest' });
-  }
-
-  function closeSubjectMenu({ focusButton = false } = {}) {
-    if (!isSubjectMenuOpen()) return;
-    subjectSelect.classList.remove('is-open');
-    subjectButton.setAttribute('aria-expanded', 'false');
-    subjectMenu.inert = true;
-    if (focusButton) subjectButton.focus({ preventScroll: true });
-  }
-
-  subjectButton.addEventListener('click', () => {
-    if (isSubjectMenuOpen()) closeSubjectMenu();
-    else openSubjectMenu();
-  });
-
   subjectMenu.addEventListener('click', event => {
     const option = event.target.closest('.custom-select-option');
     if (!option) return;
     setSubject(option.dataset.value);
-    closeSubjectMenu({ focusButton: true });
+    subjectPopover.close({ focusButton: true });
   });
 
-  // Flechas para moverse por las opciones; Esc cierra solo el menú.
+  // Flechas para moverse por las opciones; Tab sale del menú.
   subjectMenu.addEventListener('keydown', event => {
     const i = subjectOptions.indexOf(document.activeElement);
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault();
       const next = subjectOptions[(i + (event.key === 'ArrowDown' ? 1 : -1) + subjectOptions.length) % subjectOptions.length];
       next.focus({ preventScroll: true });
-      next.scrollIntoView({ block: 'nearest' });
-    } else if (event.key === 'Escape') {
-      event.preventDefault();
-      event.stopPropagation(); // que no cierre también la hoja
-      closeSubjectMenu({ focusButton: true });
     } else if (event.key === 'Tab') {
-      closeSubjectMenu();
+      subjectPopover.close();
     }
   });
 
-  // Clic fuera del desplegable: se cierra.
-  document.addEventListener('pointerdown', event => {
-    if (isSubjectMenuOpen() && !subjectSelect.contains(event.target)) closeSubjectMenu();
+  // ---------- Fecha: mini calendario ----------
+  // El esqueleto (cabecera, días de la semana y 42 celdas) se crea una vez;
+  // al abrir o cambiar de mes solo cambian textos, clases y atributos de las
+  // celdas, así el menú nunca cambia de tamaño.
+
+  const datePicker = document.getElementById('date-picker');
+  const dateLabel = datePicker.querySelector('.custom-select-value');
+  const dateMenu = datePicker.querySelector('.custom-select-menu');
+  let dateValue = '';            // 'AAAA-MM-DD'
+  let dateView = new Date();     // día 1 del mes mostrado
+
+  const calHeader = document.createElement('div');
+  calHeader.className = 'cal-header';
+  const calPrev = document.createElement('button');
+  calPrev.type = 'button';
+  calPrev.className = 'cal-nav';
+  calPrev.setAttribute('aria-label', 'Mes anterior');
+  calPrev.textContent = '‹';
+  const calTitle = document.createElement('span');
+  calTitle.className = 'cal-title';
+  const calNext = document.createElement('button');
+  calNext.type = 'button';
+  calNext.className = 'cal-nav';
+  calNext.setAttribute('aria-label', 'Mes siguiente');
+  calNext.textContent = '›';
+  calHeader.append(calPrev, calTitle, calNext);
+
+  const calWeekdays = document.createElement('div');
+  calWeekdays.className = 'cal-weekdays';
+  for (const letter of ['L', 'M', 'X', 'J', 'V', 'S', 'D']) {
+    const cell = document.createElement('span');
+    cell.textContent = letter;
+    calWeekdays.append(cell);
+  }
+
+  const calGrid = document.createElement('div');
+  calGrid.className = 'cal-grid';
+  const calCells = Array.from({ length: 42 }, () => {
+    const cell = document.createElement('button');
+    cell.type = 'button';
+    cell.className = 'cal-day';
+    calGrid.append(cell);
+    return cell;
+  });
+  dateMenu.append(calHeader, calWeekdays, calGrid);
+
+  function renderCalendar() {
+    const today = isoDate(new Date());
+    const year = dateView.getFullYear();
+    const month = dateView.getMonth();
+    const title = dateView.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+    calTitle.textContent = title.charAt(0).toUpperCase() + title.slice(1);
+    const offset = (new Date(year, month, 1).getDay() + 6) % 7; // lunes primero
+    const days = new Date(year, month + 1, 0).getDate();
+    calCells.forEach((cell, i) => {
+      const day = i - offset + 1;
+      const inMonth = day >= 1 && day <= days;
+      const iso = inMonth ? isoDate(new Date(year, month, day)) : '';
+      cell.textContent = inMonth ? String(day) : '';
+      cell.dataset.date = iso;
+      cell.classList.toggle('is-blank', !inMonth);
+      cell.classList.toggle('is-today', iso === today);
+      cell.disabled = !inMonth || iso < today; // no se puede elegir el pasado
+      cell.setAttribute('aria-pressed', String(inMonth && iso === dateValue));
+      if (inMonth) {
+        cell.setAttribute('aria-label', new Date(year, month, day).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' }));
+      } else {
+        cell.removeAttribute('aria-label');
+      }
+    });
+    // No hay meses anteriores al actual que elegir.
+    const now = new Date();
+    calPrev.disabled = year < now.getFullYear() || (year === now.getFullYear() && month <= now.getMonth());
+  }
+
+  function dateText(iso) {
+    const today = new Date();
+    if (iso === isoDate(today)) return 'Hoy';
+    if (iso === isoDate(new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1))) return 'Mañana';
+    return parseIso(iso).toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' });
+  }
+
+  function setDate(iso) {
+    dateValue = iso;
+    dateLabel.textContent = dateText(iso);
+  }
+
+  const datePopover = createPopover(datePicker, {
+    onOpen() {
+      const selected = parseIso(dateValue);
+      dateView = new Date(selected.getFullYear(), selected.getMonth(), 1);
+      renderCalendar();
+    }
+  });
+  datePopover.focusInitial = () => {
+    (calCells.find(cell => cell.getAttribute('aria-pressed') === 'true') || calNext).focus({ preventScroll: true });
+  };
+
+  calPrev.addEventListener('click', () => {
+    dateView = new Date(dateView.getFullYear(), dateView.getMonth() - 1, 1);
+    renderCalendar();
+  });
+  calNext.addEventListener('click', () => {
+    dateView = new Date(dateView.getFullYear(), dateView.getMonth() + 1, 1);
+    renderCalendar();
+  });
+  calGrid.addEventListener('click', event => {
+    const cell = event.target.closest('.cal-day');
+    if (!cell || cell.disabled || !cell.dataset.date) return;
+    setDate(cell.dataset.date);
+    datePopover.close({ focusButton: true });
   });
 
-  const pad2 = n => String(n).padStart(2, '0');
-  const isoDate = d => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+  // ---------- Hora: dos columnas (horas y minutos) ----------
+
+  const timePicker = document.getElementById('time-picker');
+  const timeLabel = timePicker.querySelector('.custom-select-value');
+  const timeMenu = timePicker.querySelector('.custom-select-menu');
+  let timeValue = '';            // 'HH:MM' o '' (todo el día)
+
+  const allDayButton = document.createElement('button');
+  allDayButton.type = 'button';
+  allDayButton.className = 'time-allday';
+  allDayButton.textContent = 'Todo el día';
+
+  function timeColumn(label, values, part) {
+    const wrap = document.createElement('div');
+    wrap.className = 'time-col';
+    const head = document.createElement('span');
+    head.className = 'time-col__head';
+    head.textContent = label;
+    const list = document.createElement('div');
+    list.className = 'time-col__list';
+    for (const value of values) {
+      const option = document.createElement('button');
+      option.type = 'button';
+      option.className = 'time-option';
+      option.dataset.part = part;
+      option.dataset.value = value;
+      option.textContent = value;
+      list.append(option);
+    }
+    wrap.append(head, list);
+    return { wrap, list, options: [...list.children] };
+  }
+
+  const hourColumn = timeColumn('Hora', Array.from({ length: 24 }, (_, h) => pad2(h)), 'h');
+  const minuteColumn = timeColumn('Min', ['00', '15', '30', '45'], 'm');
+  const timeColumns = document.createElement('div');
+  timeColumns.className = 'time-cols';
+  timeColumns.append(hourColumn.wrap, minuteColumn.wrap);
+  timeMenu.append(allDayButton, timeColumns);
+
+  function setTime(value) {
+    timeValue = value;
+    timeLabel.textContent = value || 'Todo el día';
+    timePicker.querySelector('.custom-select-btn').classList.toggle('has-value', Boolean(value));
+    const [h, m] = value ? value.split(':') : ['', ''];
+    hourColumn.options.forEach(o => o.setAttribute('aria-pressed', String(o.dataset.value === h)));
+    minuteColumn.options.forEach(o => o.setAttribute('aria-pressed', String(o.dataset.value === m)));
+    allDayButton.setAttribute('aria-pressed', String(!value));
+  }
+
+  const timePopover = createPopover(timePicker);
+  timePopover.focusInitial = () => {
+    // Sin hora elegida, la columna se abre por la hora actual.
+    const hour = timeValue ? timeValue.slice(0, 2) : pad2(new Date().getHours());
+    const option = hourColumn.options.find(o => o.dataset.value === hour);
+    centerInColumn(hourColumn.list, option);
+    (timeValue ? option : allDayButton).focus({ preventScroll: true });
+  };
+
+  // Hora: se marca y el menú sigue abierto para elegir minutos (si aún no
+  // había, :00). Minutos: se marca y se cierra. "Todo el día": sin hora.
+  timeMenu.addEventListener('click', event => {
+    if (event.target === allDayButton) {
+      setTime('');
+      timePopover.close({ focusButton: true });
+      return;
+    }
+    const option = event.target.closest('.time-option');
+    if (!option) return;
+    const [h, m] = timeValue ? timeValue.split(':') : [pad2(new Date().getHours()), '00'];
+    if (option.dataset.part === 'h') {
+      setTime(`${option.dataset.value}:${m}`);
+    } else {
+      setTime(`${h}:${option.dataset.value}`);
+      timePopover.close({ focusButton: true });
+    }
+  });
 
   const isSheetOpen = () => app.classList.contains('is-sheet-open');
 
@@ -541,13 +763,12 @@
     sheetTitle.textContent = text.title;
     sheetName.placeholder = text.name;
     sheetSubmit.textContent = text.submit;
-    const today = isoDate(new Date());
-    sheetDate.value = today;
-    sheetDate.min = today;
     sheetSubmit.disabled = false;
     setSheetError('');
+    closePopovers();
     setSubject('');
-    closeSubjectMenu();
+    setDate(isoDate(new Date()));
+    setTime('');
 
     sheet.inert = false;
     tasksView.inert = true; // la lista de detrás no recibe foco ni clics
@@ -560,7 +781,7 @@
   function closeSheet() {
     if (!isSheetOpen()) return;
     clearTimeout(sheetFocusTimer);
-    closeSubjectMenu();
+    closePopovers();
     app.classList.remove('is-sheet-open'); // revierte hoja, zoom y desenfoque
     sheet.inert = true;
     if (currentView() === 'tasks') tasksView.inert = false;
@@ -581,14 +802,14 @@
       uid: `custom-${crypto.randomUUID()}`,
       title: title.slice(0, CUSTOM_LIMITS.title),
       subject: subjectValue,
-      date: sheetDate.value,
-      time: sheetTime.value,
+      date: dateValue,
+      time: timeValue,
       description: sheetDesc.value.trim().slice(0, CUSTOM_LIMITS.description),
       created: new Date().toISOString()
     };
     if (customToEvent(item).end < new Date()) {
-      setSheetError('Esa fecha ya ha pasado');
-      sheetDate.focus({ preventScroll: true });
+      setSheetError('Esa hora ya ha pasado');
+      timePopover.button.focus({ preventScroll: true });
       return;
     }
 
@@ -673,12 +894,20 @@
     setTasksStatus(`${pending} ${pending === 1 ? 'pendiente' : 'pendientes'} · ${loadedAt}`);
   }
 
-  /** Refleja `completed` en los li ya pintados: solo clases y checked, sin reconstruir. */
-  function applyCompleted() {
+  /**
+   * Refleja `completed` en los li ya pintados: solo clases y checked, sin
+   * reconstruir. Al pintar la lista (animate = false) se aplica de golpe; si
+   * llega un cambio de otro ordenador (animate = true), cada tarea que cambia
+   * hace la misma animación que al marcarla a mano.
+   */
+  function applyCompleted({ animate = false } = {}) {
     for (const li of tasksList.querySelectorAll('.task')) {
       const done = completed.has(li.dataset.uid);
-      li.classList.toggle('task--completed', done);
-      li.querySelector('.task__check').checked = done;
+      const check = li.querySelector('.task__check');
+      if (check.checked !== done) check.checked = done;
+      if (li.classList.contains('task--completed') === done) continue;
+      if (animate) startTaskToggle(li, done);
+      else li.classList.toggle('task--completed', done);
     }
     updateTasksCount();
   }
@@ -824,15 +1053,26 @@
   const TASK_ENTER_MS = 300;
   const taskTimers = new WeakMap();
 
-  // Al marcar, antes de salir se deja ver el relleno, el check y el "pop".
-  const CHECK_SHOW_MS = 350;
+  // Antes de moverse, la tarea se queda 300 ms en su sitio mostrando el
+  // cambio (.is-completing / .is-uncompleting): relleno, check y texto.
+  const CHECK_SHOW_MS = 300;
+
+  /** Empieza el cambio visual de una tarea y la mueve al acabar. */
+  function startTaskToggle(li, done) {
+    li.classList.toggle('is-completing', done);
+    li.classList.toggle('is-uncompleting', !done);
+    moveTask(li, CHECK_SHOW_MS);
+  }
 
   function moveTask(li, delay = 0) {
     clearTimeout(taskTimers.get(li));
     li.classList.remove('is-entering');
-    // Desmarcada antes de empezar a salir: ya está en su sitio, no se mueve.
+    // Vuelta atrás antes de empezar a salir: ya está en su sitio, no se mueve.
     const done = completed.has(li.dataset.uid);
-    if (!li.classList.contains('is-exiting') && li.classList.contains('task--completed') === done) return;
+    if (!li.classList.contains('is-exiting') && li.classList.contains('task--completed') === done) {
+      li.classList.remove('is-completing', 'is-uncompleting');
+      return;
+    }
     if (delay) {
       taskTimers.set(li, setTimeout(() => moveTask(li), delay));
       return;
@@ -843,6 +1083,7 @@
       flipReorder(others, () => {
         // Estado actual (por si se volvió a marcar o llegó un cambio de sync).
         li.classList.toggle('task--completed', completed.has(li.dataset.uid));
+        li.classList.remove('is-completing', 'is-uncompleting');
       });
       li.classList.remove('is-exiting');
       li.classList.add('is-entering');
@@ -864,7 +1105,9 @@
     } else {
       completed.delete(li.dataset.uid);
     }
-    moveTask(li, check.checked ? CHECK_SHOW_MS : 0);
+    startTaskToggle(li, check.checked);
+    // Se guarda ya (no tras los 300 ms): si el popup se cierra justo después,
+    // el cambio no se pierde. Su eco en onChanged no toca la lista (abajo).
     saveCompleted();
   });
 
@@ -877,8 +1120,14 @@
       applyIpeDone();
     }
     if (changes[DONE_KEY]) {
-      completed = new Set(changes[DONE_KEY].newValue || []);
-      applyCompleted();
+      const next = new Set(changes[DONE_KEY].newValue || []);
+      // Eco de lo que se acaba de guardar aquí: el estado ya es ese y la
+      // animación en curso no se corta. Solo se aplica si viene de fuera.
+      const same = next.size === completed.size && [...next].every(uid => completed.has(uid));
+      if (!same) {
+        completed = next;
+        applyCompleted({ animate: true });
+      }
     }
     if (Object.values(CUSTOM_KEYS).some(key => changes[key])) {
       const next = mergeCustomChanges(customItems, changes);
@@ -944,7 +1193,8 @@
       if (event.key === 'Escape') {
         event.preventDefault();
         // Primero se cierra el desplegable si está abierto; luego, la hoja.
-        if (isSubjectMenuOpen()) closeSubjectMenu({ focusButton: true });
+        const popover = openPopover();
+        if (popover) popover.close({ focusButton: true });
         else closeSheet();
       }
       return; // con la hoja abierta, las teclas son para sus campos
