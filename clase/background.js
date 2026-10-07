@@ -1,6 +1,9 @@
 /*
- * Service worker: avisa con una notificación cuando se abre la nueva tarea
- * de IPE (sábado a las 00:00).
+ * Service worker: avisa cuando se abre la nueva tarea de IPE (sábado a las
+ * 00:00) y 15 minutos antes de las tareas/eventos con hora.
+ *
+ * Los avisos no son notificaciones del sistema: se mandan a la pestaña activa,
+ * donde content.js pinta un banner propio (ver deliverNotices).
  *
  * Una alarma comprueba la hora cada minuto (alineada al cambio de minuto).
  * Si la tarea de esta semana ya está abierta y aún no se ha avisado, se
@@ -21,6 +24,79 @@ function startChecking() {
   chrome.alarms.create(ALARM, { when: nextMinute, periodInMinutes: 1 });
 }
 
+// ---------- Entrega de avisos a la pestaña activa (banner de content.js) ----------
+// Cada aviso se guarda en una cola (chrome.storage.local) y se manda a la
+// pestaña web activa. Si no se puede (chrome://, nueva pestaña, PDF, sin
+// ventana…), espera y se reintenta al cambiar de pestaña o en el siguiente
+// latido, hasta que caduca. Así ningún aviso se pierde ni sale dos veces.
+
+const PENDING_KEY = 'pendingNotices';  // [{ id, kind, title, message, context, expiresAt }]
+const NOTICE_MESSAGE = 'SHOW_INJECTED_NOTIFICATION';
+
+/** Pestaña activa de la última ventana usada, si es una web normal. */
+async function activeWebTab() {
+  const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+  // Con host_permissions <all_urls>, tab.url llega en las http(s); en el resto no.
+  return tab && /^https?:/.test(tab.url || '') ? tab : null;
+}
+
+/** Manda un aviso a la pestaña; true si content.js confirma que lo ha pintado. */
+async function sendNotice(tabId, notice) {
+  const message = { type: NOTICE_MESSAGE, ...notice };
+  try {
+    return Boolean(await chrome.tabs.sendMessage(tabId, message));
+  } catch {
+    // Pestaña abierta antes de instalar/actualizar la extensión: aún no tiene
+    // el content script. Se le inyecta y se reintenta una vez.
+    try {
+      await chrome.scripting.insertCSS({ target: { tabId }, files: ['content.css'] });
+      await chrome.scripting.executeScript({ target: { tabId }, files: ['content.js'] });
+      return Boolean(await chrome.tabs.sendMessage(tabId, message));
+    } catch {
+      return false; // página donde no se puede inyectar: el aviso espera
+    }
+  }
+}
+
+async function runDeliverNotices() {
+  const { [PENDING_KEY]: stored = [] } = await chrome.storage.local.get(PENDING_KEY);
+  const now = Date.now();
+  const live = stored.filter(notice => notice.expiresAt > now);
+  let remaining = live;
+  if (live.length) {
+    const tab = await activeWebTab();
+    if (tab) {
+      remaining = [];
+      for (const notice of live) {
+        if (!(await sendNotice(tab.id, notice))) remaining.push(notice);
+      }
+    }
+  }
+  if (remaining.length !== stored.length) await chrome.storage.local.set({ [PENDING_KEY]: remaining });
+}
+
+// En fila, igual que las comprobaciones: dos entregas a la vez podrían leer la
+// misma cola y mandar un aviso dos veces.
+let deliverQueue = Promise.resolve();
+
+function deliverNotices() {
+  deliverQueue = deliverQueue
+    .then(runDeliverNotices)
+    .catch(error => console.warn('Entrega de avisos:', error));
+  return deliverQueue;
+}
+
+/** Añade avisos a la cola (sin repetir id) y los intenta entregar ya. */
+async function queueNotices(notices) {
+  if (!notices.length) return;
+  await (deliverQueue = deliverQueue.then(async () => {
+    const { [PENDING_KEY]: stored = [] } = await chrome.storage.local.get(PENDING_KEY);
+    const ids = new Set(stored.map(n => n.id));
+    await chrome.storage.local.set({ [PENDING_KEY]: [...stored, ...notices.filter(n => !ids.has(n.id))] });
+  }).catch(error => console.warn('Cola de avisos:', error)));
+  return deliverNotices();
+}
+
 /** Al pasar el viernes 20:00, la tarea marcada como entregada se desmarca. */
 async function clearExpiredIpeDone() {
   const { [IPE_DONE_KEY]: value } = await chrome.storage.sync.get(IPE_DONE_KEY);
@@ -37,13 +113,14 @@ async function checkIpeOpening() {
   if (notified === opening) return;
 
   await chrome.storage.local.set({ [FLAG]: opening });
-  chrome.notifications.create(`ipe-${opening}`, {
-    type: 'basic',
-    iconUrl: 'icons/icon_128.png',
+  await queueNotices([{
+    id: `ipe-${opening}`,
+    kind: 'ipe',
     title: 'Entrega IPE',
     message: '¡La tarea de IPE ya está abierta!',
-    priority: 2
-  });
+    context: 'Entrega el viernes a las 20:00',
+    expiresAt: ipeStatus(now).deadline.getTime() // no tiene sentido después de la entrega
+  }]);
 }
 
 // ---------- Aviso 15 minutos antes de tareas y eventos con hora ----------
@@ -116,22 +193,22 @@ async function runUpcomingEventsCheck() {
       !notified[`${event.uid}|${event.start.toISOString()}`];
   });
 
-  // Primero se guarda que se avisó y después se avisa: si algo falla a
+  // Primero se guarda que se avisó y después se encola: si algo falla a
   // medias, como mucho se pierde un aviso, nunca sale repetido.
   for (const event of due) notified[`${event.uid}|${event.start.toISOString()}`] = event.start.getTime();
   if (due.length || changed) await chrome.storage.local.set({ [NOTIFIED_KEY]: notified });
 
-  for (const event of due) {
-    const time = event.start.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
-    chrome.notifications.create(`event-${event.uid}|${event.start.toISOString()}`, {
-      type: 'basic',
-      iconUrl: 'icons/icon_128.png',
-      title: `Próximamente: ${event.summary}`,
-      message: eventNoticeText(event, event.start - now),
-      contextMessage: [time, event.category].filter(Boolean).join(' · '),
-      priority: 2
-    });
-  }
+  await queueNotices(due.map(event => ({
+    id: `event-${event.uid}|${event.start.toISOString()}`,
+    kind: event.kind === 'task' ? 'task' : 'event',
+    title: `Próximamente: ${event.summary}`,
+    message: eventNoticeText(event, event.start - now),
+    context: [
+      event.start.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
+      event.category
+    ].filter(Boolean).join(' · '),
+    expiresAt: event.start.getTime() // si no se ha podido mostrar antes de empezar, ya no
+  })));
 }
 
 // Las comprobaciones van en fila: si coinciden la alarma y el arranque, la
@@ -165,4 +242,15 @@ chrome.alarms.onAlarm.addListener(alarm => {
   checkIpeOpening();
   clearExpiredIpeDone();
   checkUpcomingEvents();
+  deliverNotices(); // reintenta los que esperaban
+});
+
+// Al cambiar a otra pestaña o ventana, o al terminar de cargar la activa, se
+// entregan los avisos que esperaban una página web donde mostrarse.
+chrome.tabs.onActivated.addListener(() => deliverNotices());
+chrome.tabs.onUpdated.addListener((tabId, info, tab) => {
+  if (info.status === 'complete' && tab.active) deliverNotices();
+});
+chrome.windows.onFocusChanged.addListener(windowId => {
+  if (windowId !== chrome.windows.WINDOW_ID_NONE) deliverNotices();
 });

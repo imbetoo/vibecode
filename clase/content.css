@@ -1,0 +1,175 @@
+/*
+ * Banner de avisos de Clase dentro de cualquier web. Todo cuelga de
+ * .clase-ext-stack / .clase-ext-notification y cada pieza empieza con
+ * `all: initial`, para que el CSS de la página no la toque (ni al revés).
+ * Las animaciones llevan prefijo: un @keyframes "slideIn" de la web chocaría.
+ */
+
+/* Pila fija arriba a la derecha: varios avisos a la vez se apilan. */
+.clase-ext-stack {
+  all: initial;
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 2147483647;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none; /* los huecos de la pila no tapan la web */
+}
+
+.clase-ext-stack .clase-ext-notification {
+  all: initial;
+  position: relative;
+  box-sizing: border-box;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  width: 320px;
+  padding: 16px;
+  border-radius: 16px;
+  background: rgba(30, 30, 30, 0.85);
+  -webkit-backdrop-filter: blur(20px) saturate(1.6);
+  backdrop-filter: blur(20px) saturate(1.6);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.3);
+  color: #fff;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  line-height: 1.35;
+  text-align: left;
+  cursor: default;
+  pointer-events: auto;
+  animation: clase-ext-slide-in 0.5s cubic-bezier(0.25, 0.8, 0.25, 1) both;
+}
+
+.clase-ext-stack .clase-ext-notification.is-leaving {
+  animation: clase-ext-slide-out 0.4s cubic-bezier(0.25, 0.8, 0.25, 1) forwards;
+  pointer-events: none;
+}
+
+@keyframes clase-ext-slide-in {
+  from { transform: translateX(120%); opacity: 0; }
+  to   { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes clase-ext-slide-out {
+  from { transform: translateX(0); opacity: 1; }
+  to   { transform: translateX(120%); opacity: 0; }
+}
+
+/* Icono: campana sobre el color de cada tipo (los de la tarjeta del popup). */
+.clase-ext-notification .clase-ext-notification__icon {
+  all: initial;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: #6accff;
+  color: #1d2130;
+}
+
+.clase-ext-notification--ipe .clase-ext-notification__icon   { background: #ffb36b; }
+.clase-ext-notification--task .clase-ext-notification__icon  { background: #47ff94; }
+.clase-ext-notification--event .clase-ext-notification__icon { background: #6accff; }
+
+.clase-ext-notification .clase-ext-notification__icon svg {
+  all: initial;
+  display: block;
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Sin `all: initial` aquí: en Chrome la forma del trazo (`d`) es una
+   propiedad CSS y se borraría. Solo se fija el trazo. */
+.clase-ext-notification .clase-ext-notification__icon svg path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.clase-ext-notification .clase-ext-notification__body {
+  all: initial;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+  font-family: inherit;
+  color: inherit;
+  line-height: inherit;
+}
+
+.clase-ext-notification .clase-ext-notification__app,
+.clase-ext-notification .clase-ext-notification__title,
+.clase-ext-notification .clase-ext-notification__message,
+.clase-ext-notification .clase-ext-notification__context {
+  all: initial;
+  display: block;
+  font-family: inherit;
+  color: inherit;
+  line-height: inherit;
+  overflow-wrap: anywhere;
+}
+
+.clase-ext-notification .clase-ext-notification__app {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.55;
+}
+
+.clase-ext-notification .clase-ext-notification__title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.clase-ext-notification .clase-ext-notification__message {
+  font-size: 13px;
+  opacity: 0.8;
+}
+
+.clase-ext-notification .clase-ext-notification__context {
+  margin-top: 2px;
+  font-size: 12px;
+  opacity: 0.55;
+}
+
+/* Cerrar: aparece al pasar el ratón, arriba a la izquierda (como en macOS). */
+.clase-ext-notification .clase-ext-notification__close {
+  all: initial;
+  position: absolute;
+  top: -7px;
+  left: -7px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1;
+  color: #fff;
+  border-radius: 50%;
+  background: rgba(60, 60, 64, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+  opacity: 0;
+  transform: scale(0.8);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.clase-ext-notification:hover .clase-ext-notification__close,
+.clase-ext-notification .clase-ext-notification__close:focus-visible {
+  opacity: 1;
+  transform: scale(1);
+}
