@@ -346,7 +346,7 @@
   let customItems = [];
 
   function mergeUpcoming() {
-    upcoming = [...moodleUpcoming, ...upcomingCustomEvents(customItems)].sort((a, b) => a.start - b.start);
+    upcoming = mergeUpcomingEvents(moodleUpcoming, customItems);
   }
 
   async function loadTasks() {

@@ -72,6 +72,16 @@ function upcomingCustomEvents(items, now = new Date()) {
 }
 
 /**
+ * Lista unificada de próximos eventos: los de Moodle (ya filtrados por
+ * fetchCalendar) + los propios que no han terminado, ordenados por inicio.
+ * La usan el horario completo y el service worker (avisos).
+ */
+function mergeUpcomingEvents(moodleUpcoming, customItems, now = new Date()) {
+  return [...moodleUpcoming, ...upcomingCustomEvents(customItems, now)]
+    .sort((a, b) => a.start - b.start);
+}
+
+/**
  * Para la lista del popup: los que no han terminado y también los pasados
  * recientes, marcados con `expired` (se pintan tachados al final).
  */
@@ -153,11 +163,21 @@ function parseInWorker(text) {
  * Descarga y parsea el calendario.
  * @returns {Promise<{uids: string[], upcoming: object[], done: Set<string>}>}
  */
+/**
+ * En el service worker no existe `Worker` (MV3 no deja crear Web Workers ahí):
+ * se parsea directamente con ics.js, que background.js carga con importScripts.
+ */
+function parseDirect(text) {
+  const events = parseICS(text);
+  return { uids: events.map(e => e.uid), upcoming: upcomingEvents(events, new Date()) };
+}
+
 async function fetchCalendar(url) {
   const response = await fetch(url, { cache: 'no-store' });
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   const text = await response.text();
   if (!text.includes('BEGIN:VCALENDAR')) throw new Error('el enlace no devuelve un calendario .ics');
-  const [parsed, done] = await Promise.all([parseInWorker(text), readCompleted()]);
+  const parse = typeof Worker === 'function' ? parseInWorker : parseDirect;
+  const [parsed, done] = await Promise.all([parse(text), readCompleted()]);
   return { ...parsed, done };
 }
