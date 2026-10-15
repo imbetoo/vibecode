@@ -237,7 +237,32 @@ chrome.runtime.onStartup.addListener(() => {
   checkUpcomingEvents();
 });
 
+// ---------- Fin del modo enfoque con el popup cerrado ----------
+// popup.js guarda la sesión en focusState y programa esta alarma para su fin.
+// Si el popup estaba abierto al acabar, él ya cerró la sesión y aquí no se
+// avisa (nada de avisos dobles).
+const FOCUS_ALARM = 'focus-end';
+const FOCUS_KEY = 'focusState';
+
+async function finishFocusSession() {
+  const { [FOCUS_KEY]: state } = await chrome.storage.local.get(FOCUS_KEY);
+  if (!state?.active || state.endTime > Date.now() + 1000) return;
+  await chrome.storage.local.remove(FOCUS_KEY);
+  await queueNotices([{
+    id: `focus-${state.endTime}`,
+    kind: 'focus',
+    title: '¡Enfoque completado!',
+    message: state.title,
+    context: '25 minutos · Tómate un descanso',
+    expiresAt: state.endTime + 60 * 60 * 1000 // si no se ve en una hora, ya no
+  }]);
+}
+
 chrome.alarms.onAlarm.addListener(alarm => {
+  if (alarm.name === FOCUS_ALARM) {
+    finishFocusSession().catch(error => console.warn('Fin de enfoque:', error));
+    return;
+  }
   if (alarm.name !== ALARM) return;
   checkIpeOpening();
   clearExpiredIpeDone();

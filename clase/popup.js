@@ -147,14 +147,19 @@
 
   // ---------- Navegación entre vistas ----------
 
-  const VIEWS = { menu: menuView, schedule: scheduleView, tasks: tasksView };
+  const focusView = document.getElementById('focus-view');
+  const VIEWS = { menu: menuView, schedule: scheduleView, tasks: tasksView, focus: focusView };
   const VIEW_KEY = 'clase-last-view';
 
   /** Muestra una vista; las demás quedan inertes (sin foco ni clics). */
   function showView(name) {
     app.classList.toggle('is-schedule', name === 'schedule');
     app.classList.toggle('is-tasks', name === 'tasks');
+    app.classList.toggle('is-focus', name === 'focus');
     for (const [key, view] of Object.entries(VIEWS)) view.inert = key !== name;
+    // El enfoque no se guarda como "última vista": se restaura desde su sesión
+    // (ver restoreFocus), y al acabar se vuelve a las tareas.
+    if (name === 'focus') return;
     try {
       localStorage.setItem(VIEW_KEY, name); // al reabrir el popup se vuelve aquí
     } catch {
@@ -167,6 +172,7 @@
    * de entrada: la vista ya está en su sitio cuando se pinta el popup.
    */
   function restoreLastView() {
+    if (restoreFocus()) return; // una sesión de enfoque en marcha manda
     let saved = 'menu';
     try {
       saved = localStorage.getItem(VIEW_KEY) || 'menu';
@@ -182,6 +188,7 @@
   function currentView() {
     if (app.classList.contains('is-schedule')) return 'schedule';
     if (app.classList.contains('is-tasks')) return 'tasks';
+    if (app.classList.contains('is-focus')) return 'focus';
     return 'menu';
   }
 
@@ -397,6 +404,202 @@
     dayIndex = (dayIndex + step + WEEK.length) % WEEK.length;
     renderDay(step);
   }
+
+  // ---------- Modo enfoque (pomodoro de 25 min) ----------
+  // La sesión vive en chrome.storage.local (focusState), así sobrevive a
+  // cerrar el popup, y una alarma (FOCUS_ALARM) hace que el service worker
+  // avise al acabar aunque el popup esté cerrado. Una copia en localStorage
+  // (síncrono) permite abrir el popup directamente en el temporizador, sin
+  // pintar antes otra vista; chrome.storage.local es la fuente de verdad.
+
+  const FOCUS_KEY = 'focusState';
+  const FOCUS_MIRROR = 'clase-focus';
+  const FOCUS_ALARM = 'focus-end';
+  const FOCUS_MS = 25 * 60 * 1000;
+
+  const focusTitle = document.getElementById('focus-task-title');
+  const focusTimer = document.getElementById('focus-timer');
+  const focusBar = document.getElementById('focus-progress-bar');
+  const focusEnds = document.getElementById('focus-ends');
+  const focusExitLabel = document.getElementById('focus-exit-label');
+  let focusTick = 0;
+  let focusSession = null; // { title, endTime } de la sesión pintada
+
+  // Icono (diana) del botón de cada tarea: se crea una vez y se clona.
+  const FOCUS_ICON = (() => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'task__focus-btn';
+    const svgNs = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(svgNs, 'svg');
+    for (const [k, v] of Object.entries({ viewBox: '0 0 24 24', width: 16, height: 16, fill: 'none', stroke: 'currentColor', 'stroke-width': 2.2, 'aria-hidden': 'true' })) {
+      svg.setAttribute(k, v);
+    }
+    for (const r of [9, 5]) {
+      const circle = document.createElementNS(svgNs, 'circle');
+      circle.setAttribute('cx', 12);
+      circle.setAttribute('cy', 12);
+      circle.setAttribute('r', r);
+      svg.append(circle);
+    }
+    const dot = document.createElementNS(svgNs, 'circle');
+    for (const [k, v] of Object.entries({ cx: 12, cy: 12, r: 1.6, fill: 'currentColor', stroke: 'none' })) dot.setAttribute(k, v);
+    svg.append(dot);
+    button.append(svg);
+    return button;
+  })();
+
+  function readFocusMirror() {
+    try {
+      const state = JSON.parse(localStorage.getItem(FOCUS_MIRROR) || 'null');
+      return state?.active && state.endTime > Date.now() ? state : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function writeFocusMirror(state) {
+    try {
+      if (state) localStorage.setItem(FOCUS_MIRROR, JSON.stringify(state));
+      else localStorage.removeItem(FOCUS_MIRROR);
+    } catch {}
+  }
+
+  const formatClock = ms => {
+    const total = Math.max(0, Math.ceil(ms / 1000));
+    return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+  };
+
+  /** Pinta un segundo del temporizador: solo textContent y un transform. */
+  function renderFocusTick() {
+    const left = focusSession.endTime - Date.now();
+    if (left <= 0) {
+      finishFocus();
+      return;
+    }
+    const text = formatClock(left);
+    if (focusTimer.textContent !== text) focusTimer.textContent = text;
+    // La barra va un segundo por delante: su transición dura 1 s y llega justo.
+    const done = Math.min(1, (FOCUS_MS - left + 1000) / FOCUS_MS);
+    focusBar.style.transform = `scaleX(${done.toFixed(4)})`;
+    // Siguiente tick en el cambio de segundo respecto a endTime (sin deriva).
+    focusTick = setTimeout(renderFocusTick, (left % 1000) || 1000);
+  }
+
+  function startFocusUI(title, endTime, { instant = false } = {}) {
+    clearTimeout(focusTick);
+    focusSession = { title, endTime };
+    focusTitle.textContent = title;
+    focusTitle.title = title;
+    focusTimer.classList.remove('is-done');
+    focusExitLabel.textContent = 'Salir';
+    focusEnds.textContent = `Termina a las ${new Date(endTime).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}`;
+    // La barra arranca ya en su punto, sin animar desde 0.
+    focusBar.style.transition = 'none';
+    focusBar.style.transform = `scaleX(${Math.min(1, (FOCUS_MS - (endTime - Date.now())) / FOCUS_MS).toFixed(4)})`;
+    void focusBar.offsetWidth;
+    focusBar.style.transition = '';
+
+    if (instant) app.classList.add('is-restoring');
+    showView('focus');
+    if (instant) {
+      void app.offsetWidth;
+      app.classList.remove('is-restoring');
+    }
+    renderFocusTick();
+  }
+
+  /** Sonido corto (dos notas suaves) con Web Audio, sin archivos. */
+  function playChime() {
+    try {
+      const audio = new AudioContext();
+      [880, 1318.5].forEach((freq, i) => {
+        const osc = audio.createOscillator();
+        const gain = audio.createGain();
+        const t = audio.currentTime + i * 0.18;
+        osc.type = 'sine';
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.0001, t);
+        gain.gain.exponentialRampToValueAtTime(0.18, t + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
+        osc.connect(gain).connect(audio.destination);
+        osc.start(t);
+        osc.stop(t + 0.55);
+      });
+      setTimeout(() => audio.close(), 1200);
+    } catch {
+      // Sin audio (o bloqueado): queda el aviso visual.
+    }
+  }
+
+  async function clearFocusSession() {
+    writeFocusMirror(null);
+    try {
+      await Promise.all([chrome.storage.local.remove(FOCUS_KEY), chrome.alarms.clear(FOCUS_ALARM)]);
+    } catch {}
+  }
+
+  /** Fin con el popup abierto: "¡Completado!", sonido y se cierra la sesión
+      (así la alarma del service worker ya no avisa por duplicado). */
+  function finishFocus() {
+    clearTimeout(focusTick);
+    focusTimer.textContent = '¡Completado!';
+    focusTimer.classList.add('is-done');
+    focusBar.style.transform = 'scaleX(1)';
+    focusEnds.textContent = 'Buen trabajo. Tómate 5 minutos.';
+    focusExitLabel.textContent = 'Volver';
+    focusSession = null;
+    playChime();
+    clearFocusSession();
+  }
+
+  async function beginFocus(title, uid) {
+    const endTime = Date.now() + FOCUS_MS;
+    const state = { active: true, title, uid, endTime };
+    writeFocusMirror(state);
+    startFocusUI(title, endTime);
+    try {
+      await chrome.storage.local.set({ [FOCUS_KEY]: state });
+      await chrome.alarms.create(FOCUS_ALARM, { when: endTime });
+    } catch {
+      // Fuera de la extensión: el temporizador funciona igual mientras esté abierto.
+    }
+  }
+
+  /** Al abrir el popup: si hay sesión en marcha, directo al temporizador. */
+  function restoreFocus() {
+    const state = readFocusMirror();
+    if (!state) return false;
+    startFocusUI(state.title, state.endTime, { instant: true });
+    return true;
+  }
+
+  /** Comprueba la copia síncrona contra chrome.storage.local y corrige. */
+  async function verifyFocusSession() {
+    let state = null;
+    try {
+      ({ [FOCUS_KEY]: state } = await chrome.storage.local.get(FOCUS_KEY));
+    } catch {
+      return;
+    }
+    const live = state?.active && state.endTime > Date.now() ? state : null;
+    writeFocusMirror(live);
+    if (live && (!focusSession || focusSession.endTime !== live.endTime)) {
+      startFocusUI(live.title, live.endTime, { instant: true });
+    } else if (!live && focusSession && currentView() === 'focus') {
+      // La sesión se cerró en otro sitio (p. ej. ya terminó): fuera.
+      clearTimeout(focusTick);
+      focusSession = null;
+      showTasks();
+    }
+  }
+
+  document.getElementById('focus-exit').addEventListener('click', () => {
+    clearTimeout(focusTick);
+    focusSession = null;
+    clearFocusSession();
+    showTasks();
+  });
 
   // ---------- Tareas del Aula Virtual (calendario .ics de Moodle) ----------
 
@@ -1059,7 +1262,11 @@
       when.classList.toggle('is-soon', !event.expired && minutes < 24 * 60);
 
       li.title = [event.summary, event.start.toLocaleString('es-ES'), event.description].filter(Boolean).join('\n');
-      li.append(check, date, body, when);
+      const focusBtn = FOCUS_ICON.cloneNode(true);
+      focusBtn.setAttribute('aria-label', `Modo enfoque: ${event.summary}`);
+      focusBtn.title = 'Modo enfoque (25 min)';
+
+      li.append(check, date, body, when, focusBtn);
       return li;
     });
     tasksList.replaceChildren(...items);
@@ -1122,6 +1329,14 @@
   }
 
   tasksList.addEventListener('animationend', event => event.target.classList.remove('is-popping'));
+
+  // Botón de enfoque de cada tarea (delegado): empieza un pomodoro sobre ella.
+  tasksList.addEventListener('click', event => {
+    const button = event.target.closest('.task__focus-btn');
+    if (!button) return;
+    const li = button.closest('.task');
+    beginFocus(li.querySelector('.task__title').textContent, li.dataset.uid);
+  });
 
   // Un solo listener para todas las casillas (delegación de eventos).
   tasksList.addEventListener('change', event => {
@@ -1248,4 +1463,5 @@
   startIPECountdown();
   loadIpeDone();
   restoreLastView();
+  verifyFocusSession();
 })();

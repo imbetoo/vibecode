@@ -95,6 +95,7 @@
 .clase-ext-notification--ipe .clase-ext-notification__icon   { background: #ffb36b; }
 .clase-ext-notification--task .clase-ext-notification__icon  { background: #47ff94; }
 .clase-ext-notification--event .clase-ext-notification__icon { background: #6accff; }
+.clase-ext-notification--focus .clase-ext-notification__icon { background: #ff9f0a; }
 
 .clase-ext-notification .clase-ext-notification__icon svg {
   all: initial;

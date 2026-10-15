@@ -151,10 +151,18 @@ button:focus-visible {
 .view--menu { transform: translateX(0); opacity: 1; }
 
 .view--schedule,
-.view--tasks { transform: translateX(100%); opacity: 0; }
+.view--tasks,
+.view--focus { transform: translateX(100%); opacity: 0; }
 
 .app.is-schedule .view--menu,
-.app.is-tasks .view--menu { transform: translateX(-30%); opacity: 0; }
+.app.is-tasks .view--menu,
+.app.is-focus .view--menu { transform: translateX(-30%); opacity: 0; }
+
+/* Del enfoque se vuelve a las tareas: al entrar, la lista se aparta a la
+   izquierda (como un "push" de iOS) en vez de salir por la derecha. */
+.app.is-focus .view--tasks { transform: translateX(-30%); opacity: 0; }
+
+.app.is-focus .view--focus { transform: translateX(0); opacity: 1; }
 
 .app.is-schedule .view--schedule,
 .app.is-tasks .view--tasks { transform: translateX(0); opacity: 1; }
@@ -1512,3 +1520,132 @@ button:focus-visible {
 .sheet-submit:hover  { transform: scale(1.02); }
 .sheet-submit:active { transform: scale(0.97); }
 .sheet-submit:disabled { opacity: 0.6; cursor: progress; transform: none; }
+
+/* ---------- Vista 4: modo enfoque ---------- */
+
+.view--focus {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding-top: 12px;
+}
+
+/* La barra con "Salir" se queda arriba; el resto, centrado en la vista. */
+.focus-toolbar {
+  position: absolute;
+  top: 12px;
+  left: 20px;
+  right: 20px;
+}
+
+.focus-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 0 8px;
+}
+
+.focus-eyebrow {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-soft);
+}
+
+.focus-title {
+  margin: 0;
+  max-width: 100%;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.focus-timer {
+  margin-top: 14px;
+  font-size: 64px;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.04em;
+  transition: color var(--t-hover) var(--ease);
+}
+
+.focus-timer.is-done {
+  font-size: 40px;
+  letter-spacing: -0.02em;
+  color: #34c759;
+  animation: focus-done 0.6s var(--ease);
+}
+
+@keyframes focus-done {
+  from { opacity: 0; transform: scale(0.9); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* Barra fina de progreso: solo cambia su transform (scaleX). */
+.focus-progress {
+  width: 180px;
+  height: 4px;
+  margin-top: 10px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--control);
+}
+
+.focus-progress__bar {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  background: #34c759;
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 1s linear;
+  will-change: transform;
+}
+
+.focus-ends {
+  margin: 4px 0 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Botón de enfoque en cada tarea: discreto hasta pasar el ratón por ella.
+   (`.task >` para ganar a `.task > :not(.task__check)`, que fija transition.) */
+.task > .task__focus-btn {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  margin-left: -4px;
+  color: var(--icon);
+  border-radius: 50%;
+  opacity: 0.25;
+  transition:
+    opacity var(--t-hover) var(--ease),
+    background-color var(--t-hover) var(--ease),
+    transform var(--t-hover) var(--ease);
+}
+
+.task:hover .task__focus-btn,
+.task__focus-btn:focus-visible { opacity: 1; }
+
+.task__focus-btn:hover { background: var(--control-hover); color: #ff9f0a; }
+.task__focus-btn:active { transform: scale(0.9); }
+
+/* Hechas o pasadas: no tiene sentido enfocarse (mantiene el hueco). */
+.task--completed .task__focus-btn,
+.task.is-expired .task__focus-btn { visibility: hidden; }

@@ -182,6 +182,24 @@
       </div>
     </section>
 
+    <!-- Vista 4: modo enfoque (pomodoro de 25 min sobre una tarea) -->
+    <section id="focus-view" class="view view--focus" aria-label="Modo Enfoque" inert>
+      <div class="toolbar focus-toolbar">
+        <button id="focus-exit" class="toolbar-button" type="button" title="Cancelar y volver a las tareas">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>
+          <span id="focus-exit-label">Salir</span>
+        </button>
+      </div>
+
+      <div class="focus-center">
+        <span class="focus-eyebrow">Modo enfoque</span>
+        <h2 id="focus-task-title" class="focus-title"></h2>
+        <div id="focus-timer" class="focus-timer" role="timer" aria-live="off">25:00</div>
+        <div class="focus-progress" aria-hidden="true"><span id="focus-progress-bar" class="focus-progress__bar"></span></div>
+        <p id="focus-ends" class="focus-ends"></p>
+      </div>
+    </section>
+
     <!-- Hoja inferior (bottom sheet) para crear tareas/eventos propios -->
     <div id="sheet-backdrop" class="sheet-backdrop" aria-hidden="true"></div>
     <form id="sheet" class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title" autocomplete="off" inert>
