@@ -686,6 +686,39 @@ button:focus-visible {
   letter-spacing: -0.03em;
 }
 
+/* Título y anillo en la misma línea. */
+.tasks-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* ---------- Anillo de progreso (estilo Apple Watch) ---------- */
+
+.progress-ring-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: translateY(2px); /* centrado óptico con las mayúsculas del título */
+}
+
+/* Empieza a rellenarse desde las 12 en punto. */
+.progress-ring {
+  display: block;
+  transform: rotate(-90deg);
+}
+
+.progress-ring__track { stroke: var(--control); }
+
+/* 88 ≈ 2·π·14 (la circunferencia): offset 88 = vacío, 0 = lleno. Solo se
+   anima stroke-dashoffset; el JS cambia ese valor y nada más. */
+.progress-ring__fill {
+  stroke: #34c759;
+  stroke-dasharray: 88;
+  stroke-dashoffset: 88;
+  transition: stroke-dashoffset 0.8s var(--ease), stroke 0.3s ease;
+}
+
 .tasks-status {
   margin: 0;
   font-size: 12px;

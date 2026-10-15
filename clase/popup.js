@@ -861,6 +861,7 @@
   function showSetup(currentUrl = '') {
     tasksSetup.hidden = false;
     tasksList.hidden = true;
+    progressRing.hidden = true;
     customActions.hidden = true;
     tasksSettings.hidden = true;
     icsInput.value = currentUrl;
@@ -872,6 +873,7 @@
   function showList() {
     tasksSetup.hidden = true;
     tasksList.hidden = false;
+    progressRing.hidden = false;
     customActions.hidden = false;
     tasksSettings.hidden = false;
   }
@@ -892,6 +894,33 @@
   function updateTasksCount() {
     const pending = tasksList.querySelectorAll('.task:not(.task--completed):not(.is-expired)').length;
     setTasksStatus(`${pending} ${pending === 1 ? 'pendiente' : 'pendientes'} · ${loadedAt}`);
+    updateProgressRing(); // siempre a la par que el contador
+  }
+
+  // ---------- Anillo de progreso ----------
+
+  const RING_LENGTH = 88; // ≈ 2·π·14, igual que stroke-dasharray en popup.css
+  const progressRing = document.getElementById('progress-ring');
+  const ringFillElement = progressRing.querySelector('.progress-ring__fill');
+
+  /**
+   * % de tareas hechas (sin contar las propias que ya pasaron) en el trazo
+   * verde. Cuenta por la casilla, que cambia en el mismo instante en que se
+   * marca o desmarca; la clase .task--completed llega 300 ms después, cuando
+   * la tarea se mueve, y haría que el anillo fuese con retraso al desmarcar.
+   * Solo toca stroke-dashoffset (y el title), y solo si cambian.
+   */
+  function updateProgressRing() {
+    const allTasks = [...tasksList.querySelectorAll('.task')];
+    const validTasks = allTasks.filter(task => !task.classList.contains('is-expired'));
+    const completedCount = validTasks.filter(task => task.querySelector('.task__check').checked).length;
+    const percent = validTasks.length ? completedCount / validTasks.length : 0;
+    const offset = String(RING_LENGTH - percent * RING_LENGTH);
+    if (ringFillElement.style.strokeDashoffset !== offset) ringFillElement.style.strokeDashoffset = offset;
+    const title = validTasks.length
+      ? `${completedCount} de ${validTasks.length} hechas (${Math.round(percent * 100)} %)`
+      : 'Sin tareas';
+    if (progressRing.title !== title) progressRing.title = title;
   }
 
   /**
@@ -1106,6 +1135,7 @@
       completed.delete(li.dataset.uid);
     }
     startTaskToggle(li, check.checked);
+    updateProgressRing(); // el anillo avanza a la vez que se rellena la casilla
     // Se guarda ya (no tras los 300 ms): si el popup se cierra justo después,
     // el cambio no se pierde. Su eco en onChanged no toca la lista (abajo).
     saveCompleted();
