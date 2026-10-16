@@ -1065,6 +1065,7 @@
     tasksSetup.hidden = false;
     tasksList.hidden = true;
     progressRing.hidden = true;
+    taskFilters.hidden = true;
     customActions.hidden = true;
     tasksSettings.hidden = true;
     icsInput.value = currentUrl;
@@ -1077,6 +1078,7 @@
     tasksSetup.hidden = true;
     tasksList.hidden = false;
     progressRing.hidden = false;
+    taskFilters.hidden = false;
     customActions.hidden = false;
     tasksSettings.hidden = false;
   }
@@ -1206,15 +1208,91 @@
   function renderAll() {
     const events = [...moodleUpcoming, ...listCustomEvents(customItems)]
       .sort((a, b) => a.start - b.start);
-    renderTasks(events);
+    let visible = applyTaskFilter(events);
+    // Lo recién creado no puede quedar oculto por el filtro (p. ej. una tarea
+    // para mañana creada estando en "Hoy"): se vuelve a "Todo" para verla.
+    if (justAddedUid && currentTaskFilter !== 'all' && !visible.some(e => e.uid === justAddedUid)) {
+      setTaskFilter('all');
+      visible = events;
+    }
+    renderTasks(visible);
   }
+
+  // ---------- Filtros en píldora ----------
+
+  const TASK_FILTER_KEY = 'clase-task-filter';
+  const taskFilters = document.getElementById('task-filters');
+  const filterPills = [...taskFilters.querySelectorAll('.filter-pill')];
+  let currentTaskFilter = 'all';
+
+  const EMPTY_TEXT = {
+    all: 'No hay tareas próximas. ¡Todo al día!',
+    today: 'Nada para hoy. ¡Disfruta!',
+    events: 'Sin eventos. Crea uno con + Evento.'
+  };
+
+  /** Mismo día (año, mes y día) que hoy, sin mirar la hora. */
+  function isToday(date, now = new Date()) {
+    return date.getFullYear() === now.getFullYear() &&
+      date.getMonth() === now.getMonth() &&
+      date.getDate() === now.getDate();
+  }
+
+  /**
+   * - all: todo.
+   * - today: lo que es hoy (por fecha de inicio).
+   * - events: los eventos propios. El .ics de Moodle no distingue entregas
+   *   de eventos (solo trae título y curso), así que sus elementos no entran.
+   */
+  function applyTaskFilter(events) {
+    if (currentTaskFilter === 'today') {
+      const now = new Date();
+      return events.filter(event => isToday(event.start, now));
+    }
+    if (currentTaskFilter === 'events') return events.filter(event => event.kind === 'event');
+    return events;
+  }
+
+  /** Marca la píldora activa (clase + aria-pressed) y recuerda el filtro. */
+  function setTaskFilter(filter) {
+    currentTaskFilter = filter in EMPTY_TEXT ? filter : 'all';
+    for (const pill of filterPills) {
+      const active = pill.dataset.filter === currentTaskFilter;
+      pill.classList.toggle('is-active', active);
+      pill.setAttribute('aria-pressed', String(active));
+    }
+    try {
+      localStorage.setItem(TASK_FILTER_KEY, currentTaskFilter);
+    } catch {}
+  }
+
+  // Al reabrir el popup, el último filtro usado.
+  try {
+    setTaskFilter(localStorage.getItem(TASK_FILTER_KEY) || 'all');
+  } catch {}
+
+  taskFilters.addEventListener('click', event => {
+    const pill = event.target.closest('.filter-pill');
+    if (!pill || pill.dataset.filter === currentTaskFilter) return;
+    setTaskFilter(pill.dataset.filter);
+    if (!listLoaded) return; // aún cargando: la carga ya pintará con este filtro
+    renderAll();
+    // Fundido corto de la lista nueva (reinicia la animación).
+    tasksList.classList.remove('is-switching');
+    void tasksList.offsetWidth;
+    tasksList.classList.add('is-switching');
+    tasksList.scrollTop = 0;
+  });
+  tasksList.addEventListener('animationend', event => {
+    if (event.target === tasksList) tasksList.classList.remove('is-switching');
+  });
 
   /** Pinta la lista una vez por carga; marcar tareas después no la reconstruye. */
   function renderTasks(events) {
     if (!events.length) {
       const empty = document.createElement('li');
       empty.className = 'tasks-empty';
-      empty.textContent = 'No hay tareas próximas. ¡Todo al día!';
+      empty.textContent = EMPTY_TEXT[currentTaskFilter];
       tasksList.replaceChildren(empty);
       updateTasksCount();
       return;

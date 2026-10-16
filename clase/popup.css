@@ -809,6 +809,55 @@ button:focus-visible {
 
 /* Lista de eventos */
 
+/* ---------- Filtros en píldora (Todo / Hoy / Eventos) ---------- */
+
+.task-filters {
+  display: flex;
+  gap: 8px;
+  padding: 0 4px 12px;
+  margin: 0 -4px;
+  overflow-x: auto;
+  scrollbar-width: none; /* se desliza en horizontal sin barra visible */
+  -webkit-overflow-scrolling: touch;
+  transition: opacity 0.3s ease;
+}
+
+.task-filters::-webkit-scrollbar { display: none; }
+
+.filter-pill {
+  flex: none;
+  height: 28px;
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 14px;
+  color: var(--text-soft);
+  background: var(--control);
+  transition:
+    background-color 0.2s var(--ease),
+    color 0.2s var(--ease),
+    transform 0.2s var(--ease);
+}
+
+.filter-pill:hover { background: var(--control-hover); color: var(--text); }
+.filter-pill:active { transform: scale(0.95); }
+
+/* Activa: colores invertidos. El texto usa --pill-text (blanco en tema claro,
+   negro en oscuro): con --pill-bg quedaría casi del mismo color que el fondo. */
+.filter-pill.is-active,
+.filter-pill.is-active:hover {
+  color: var(--pill-text);
+  background: var(--text);
+}
+
+/* Al cambiar de filtro, la lista entra con un fundido corto. */
+.tasks-list.is-switching { animation: list-switch 0.25s var(--ease); }
+
+@keyframes list-switch {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: none; }
+}
+
 /* Alto de una tarea: 10 + 46 (fecha) + 10 de padding + 1 de borde. */
 .view--tasks { --task-h: 67px; }
 

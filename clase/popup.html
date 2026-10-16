@@ -163,6 +163,12 @@
         <p id="tasks-status" class="tasks-status" aria-live="polite"></p>
       </header>
 
+      <nav id="task-filters" class="task-filters" aria-label="Filtrar tareas" hidden>
+        <button class="filter-pill is-active" data-filter="all" type="button" aria-pressed="true">Todo</button>
+        <button class="filter-pill" data-filter="today" type="button" aria-pressed="false">Hoy</button>
+        <button class="filter-pill" data-filter="events" type="button" aria-pressed="false">Eventos</button>
+      </nav>
+
       <form id="tasks-setup" class="tasks-setup" hidden>
         <label for="ics-url" class="tasks-label">Enlace del calendario de Moodle (.ics)</label>
         <input id="ics-url" class="tasks-input" type="url" required placeholder="https://…/calendar/export_execute.php?…" autocomplete="off" spellcheck="false">
