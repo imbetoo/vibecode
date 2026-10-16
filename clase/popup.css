@@ -827,7 +827,18 @@ button:focus-visible {
   margin: 0 4px 14px;
   border-radius: 999px;
   background: var(--control);
+  /* Red de seguridad: si los botones no caben (pantalla estrecha, zoom), la
+     barra se desliza en horizontal sin barra visible, en vez de romper el
+     layout. Con 4 botones (≈ 302 px) en los 320 px del popup no hace falta. */
+  max-width: calc(100% - 8px);
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
 }
+
+.task-filters::-webkit-scrollbar { display: none; }
 
 .filter-slider {
   position: absolute;
@@ -863,6 +874,9 @@ button:focus-visible {
   cursor: pointer;
   transition: color 0.3s var(--ease), transform 0.2s var(--ease);
 }
+
+/* El aro de foco va por dentro: la barra tiene overflow y lo recortaría. */
+.filter-pill:focus-visible { outline-offset: -2px; }
 
 .filter-pill:hover { color: var(--text); }
 .filter-pill:active { transform: scale(0.95); }

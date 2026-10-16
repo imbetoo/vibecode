@@ -1250,6 +1250,14 @@
       void filterSlider.offsetWidth; // aplica la posición antes de reactivar la transición
       filterSlider.style.transition = '';
     }
+    // Si la barra desborda (pantalla estrecha, zoom), que el activo se vea.
+    if (taskFilters.scrollWidth > taskFilters.clientWidth) {
+      const left = activeButton.offsetLeft - 3;
+      const right = activeButton.offsetLeft + width + 3;
+      const view = taskFilters.scrollLeft + taskFilters.clientWidth;
+      const target = left < taskFilters.scrollLeft ? left : right > view ? right - taskFilters.clientWidth : null;
+      if (target !== null) taskFilters.scrollTo({ left: target, behavior: instant ? 'auto' : 'smooth' });
+    }
   }
 
   const activeFilterPill = () => taskFilters.querySelector('.filter-pill.is-active');
@@ -1258,9 +1266,11 @@
   // slider se recoloca sin animar.
   new ResizeObserver(() => updateFilterSlider(activeFilterPill(), { animate: false })).observe(taskFilters);
 
+  // También sirve de lista de filtros válidos (ver setTaskFilter).
   const EMPTY_TEXT = {
     all: 'No hay tareas próximas. ¡Todo al día!',
     today: 'Nada para hoy. ¡Disfruta!',
+    week: 'Nada para esta semana. ¡Qué calma!',
     events: 'Sin eventos. Crea uno con + Evento.'
   };
 
@@ -1272,8 +1282,24 @@
   }
 
   /**
+   * Semana natural de `now`: [lunes 00:00, lunes siguiente 00:00). El domingo
+   * es getDay() = 0 y cuenta como último día (hay que retroceder 6 días, no
+   * avanzar 1). Los días se suman con el constructor de Date, que respeta los
+   * cambios de hora de verano; el fin es exclusivo, así que no deja hueco
+   * entre el domingo 23:59:59 y el lunes.
+   */
+  function weekRange(now = new Date()) {
+    const day = now.getDay();
+    const diffToMonday = day === 0 ? -6 : 1 - day;
+    const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diffToMonday, 0, 0, 0);
+    const nextMonday = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 7, 0, 0, 0);
+    return [monday, nextMonday];
+  }
+
+  /**
    * - all: todo.
    * - today: lo que es hoy (por fecha de inicio).
+   * - week: lo que empieza entre el lunes y el domingo de esta semana.
    * - events: los eventos propios. El .ics de Moodle no distingue entregas
    *   de eventos (solo trae título y curso), así que sus elementos no entran.
    */
@@ -1281,6 +1307,10 @@
     if (currentTaskFilter === 'today') {
       const now = new Date();
       return events.filter(event => isToday(event.start, now));
+    }
+    if (currentTaskFilter === 'week') {
+      const [monday, nextMonday] = weekRange();
+      return events.filter(event => event.start >= monday && event.start < nextMonday);
     }
     if (currentTaskFilter === 'events') return events.filter(event => event.kind === 'event');
     return events;
