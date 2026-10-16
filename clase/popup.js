@@ -1079,6 +1079,8 @@
     tasksList.hidden = false;
     progressRing.hidden = false;
     taskFilters.hidden = false;
+    // Recién mostrada ya tiene medidas reales: se coloca el slider sin animar.
+    updateFilterSlider(taskFilters.querySelector('.filter-pill.is-active'), { animate: false });
     customActions.hidden = false;
     tasksSettings.hidden = false;
   }
@@ -1223,7 +1225,38 @@
   const TASK_FILTER_KEY = 'clase-task-filter';
   const taskFilters = document.getElementById('task-filters');
   const filterPills = [...taskFilters.querySelectorAll('.filter-pill')];
+  const filterSlider = document.getElementById('filter-slider');
   let currentTaskFilter = 'all';
+
+  /**
+   * Coloca el slider trasero bajo el botón activo. offsetLeft/offsetWidth son
+   * medidas de layout (no de transform), así que valen aunque la vista esté
+   * desplazada fuera de pantalla. La primera colocación y las de
+   * `animate: false` (mostrar la barra, cambios de tamaño) son de golpe; solo
+   * al cambiar de filtro se desliza.
+   */
+  function updateFilterSlider(activeButton, { animate = true } = {}) {
+    if (!activeButton || !filterSlider) return;
+    const width = activeButton.offsetWidth;
+    if (!width) return; // barra oculta: se colocará al mostrarse (ResizeObserver, showList)
+    const transform = `translateX(${activeButton.offsetLeft}px)`;
+    const widthPx = `${width}px`;
+    if (filterSlider.style.transform === transform && filterSlider.style.width === widthPx) return;
+    const instant = !animate || !filterSlider.style.width;
+    if (instant) filterSlider.style.transition = 'none';
+    filterSlider.style.transform = transform;
+    filterSlider.style.width = widthPx;
+    if (instant) {
+      void filterSlider.offsetWidth; // aplica la posición antes de reactivar la transición
+      filterSlider.style.transition = '';
+    }
+  }
+
+  const activeFilterPill = () => taskFilters.querySelector('.filter-pill.is-active');
+
+  // Si cambia el tamaño de la barra (se muestra, carga la fuente...), el
+  // slider se recoloca sin animar.
+  new ResizeObserver(() => updateFilterSlider(activeFilterPill(), { animate: false })).observe(taskFilters);
 
   const EMPTY_TEXT = {
     all: 'No hay tareas próximas. ¡Todo al día!',
@@ -1261,6 +1294,9 @@
       pill.classList.toggle('is-active', active);
       pill.setAttribute('aria-pressed', String(active));
     }
+    // Todos los caminos (clic, filtro recordado, "Todo" al crear algo) pasan
+    // por aquí, así que el slider los sigue a todos.
+    updateFilterSlider(activeFilterPill());
     try {
       localStorage.setItem(TASK_FILTER_KEY, currentTaskFilter);
     } catch {}
