@@ -964,6 +964,25 @@ button:focus-visible {
   border-bottom: 1px solid var(--glass-border);
 }
 
+/* ---------- Reordenar arrastrando ---------- */
+
+.task { cursor: grab; }
+.task:active { cursor: grabbing; }
+
+.task.is-dragging {
+  opacity: 0.4;
+  background: var(--control-hover);
+  border-radius: 12px;
+  transform: scale(0.98);
+  z-index: 10;
+}
+
+/* La línea azul de destino va como sombra interior, no como border: un
+   border-top de 2 px cambiaría el alto de la fila y la lista daría saltos
+   mientras se arrastra. */
+.task.drag-over-top { box-shadow: inset 0 2px 0 #0a84ff; }
+.task.drag-over-bottom { box-shadow: inset 0 -2px 0 #0a84ff; }
+
 /* Casilla redonda estilo Recordatorios de Apple. Todo se anima en los dos
    sentidos (marcar y desmarcar): fondo, borde y el check de ::after, que
    aparece con opacidad + escala. Al marcar a mano, además, un "pop". */

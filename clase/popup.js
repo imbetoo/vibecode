@@ -13,6 +13,13 @@
   const today = todayIndex();
   let dayIndex = today;
 
+  // Orden manual de las tareas (uids), en chrome.storage.sync: se comparte
+  // entre ordenadores y, cuando existe, manda sobre el orden por fecha.
+  const ORDER_KEY = 'taskCustomOrder';
+  let customTaskOrder = [];
+  let lastFullOrder = [];    // uids de TODAS las tareas en el orden pintado, con o sin filtro
+  let moodleLoaded = false;  // si el .ics se descargó bien en la última carga
+
   // ---------- Menú ----------
 
   function renderMenu() {
@@ -55,7 +62,7 @@
    * anima (solo transform, en la GPU) desde su sitio anterior. El elemento
    * que cambia de sitio no entra: hace su propia salida y entrada.
    */
-  function flipReorder(items, change) {
+  function flipReorder(items, change, duration = 600) {
     const before = items.map(item => item.getBoundingClientRect().top);
     change();
     const ease = getComputedStyle(document.documentElement).getPropertyValue('--ease').trim();
@@ -64,7 +71,7 @@
       if (!dy) return;
       item.animate(
         [{ transform: `translateY(${dy}px)` }, { transform: 'none' }],
-        { duration: 600, easing: ease }
+        { duration, easing: ease }
       );
     });
   }
@@ -1170,10 +1177,12 @@
     listLoaded = false;
 
     // Si el .ics falla, las tareas propias se siguen mostrando.
-    const [calendar, customs] = await Promise.allSettled([fetchCalendar(url), readCustomItems()]);
+    const [calendar, customs, savedOrder] = await Promise.allSettled([fetchCalendar(url), readCustomItems(), readTaskOrder()]);
     if (seq !== loadSeq) return; // hubo otra carga (o un cambio de enlace) mientras tanto
 
     customItems = customs.status === 'fulfilled' ? customs.value : [];
+    customTaskOrder = savedOrder.status === 'fulfilled' ? savedOrder.value : [];
+    moodleLoaded = calendar.status === 'fulfilled';
     let done;
     if (calendar.status === 'fulfilled') {
       moodleUpcoming = calendar.value.upcoming;
@@ -1206,9 +1215,30 @@
    * van tachadas al final (ver .is-expired). Siempre se pinta desde estos
    * arrays, y renderTasks vacía la lista antes (replaceChildren).
    */
+  async function readTaskOrder() {
+    const { [ORDER_KEY]: saved } = await chrome.storage.sync.get(ORDER_KEY);
+    return Array.isArray(saved) ? saved.filter(uid => typeof uid === 'string') : [];
+  }
+
   function renderAll() {
     const events = [...moodleUpcoming, ...listCustomEvents(customItems)]
       .sort((a, b) => a.start - b.start);
+    // Orden manual: las tareas con sitio guardado van primero, según ese
+    // orden; las que no lo tienen (nuevas) detrás, por fecha.
+    if (customTaskOrder.length) {
+      const rank = new Map(customTaskOrder.map((uid, i) => [uid, i]));
+      events.sort((a, b) => {
+        const rankA = rank.get(a.uid);
+        const rankB = rank.get(b.uid);
+        if (rankA !== undefined && rankB !== undefined) return rankA - rankB;
+        if (rankA !== undefined) return -1;
+        if (rankB !== undefined) return 1;
+        return a.start - b.start;
+      });
+    }
+    // El orden completo (antes de filtrar) sirve para guardar sin perder el
+    // sitio de las tareas que el filtro oculta (ver saveTaskOrder).
+    lastFullOrder = events.map(event => event.uid);
     let visible = applyTaskFilter(events);
     // Lo recién creado no puede quedar oculto por el filtro (p. ej. una tarea
     // para mañana creada estando en "Hoy"): se vuelve a "Todo" para verla.
@@ -1354,6 +1384,7 @@
 
   /** Pinta la lista una vez por carga; marcar tareas después no la reconstruye. */
   function renderTasks(events) {
+    endDrag(); // si se repinta a mitad de un arrastre, la tarea arrastrada ya no existe
     if (!events.length) {
       const empty = document.createElement('li');
       empty.className = 'tasks-empty';
@@ -1368,6 +1399,7 @@
       const li = document.createElement('li');
       li.className = 'task' + (event.kind === 'event' ? ' task--event' : '') + (event.expired ? ' is-expired' : '');
       li.dataset.uid = event.uid;
+      li.draggable = true;
 
       const check = document.createElement('input');
       check.type = 'checkbox';
@@ -1499,6 +1531,127 @@
     saveCompleted();
   });
 
+  // ---------- Reordenar arrastrando (HTML5 Drag & Drop) ----------
+  // Un solo juego de listeners en la lista (delegación). Solo se puede soltar
+  // dentro del mismo grupo visual: la lista pinta las pendientes, luego las
+  // hechas y al final las pasadas (CSS `order`), así que soltar una pendiente
+  // sobre una hecha cambiaría el DOM pero no se vería donde se soltó.
+
+  let draggedTask = null;
+  let dropTarget = null;
+  let dropAfter = false;
+
+  const taskFrom = event => (event.target instanceof Element ? event.target.closest('.task') : null);
+  const taskGroup = li => (li.classList.contains('is-expired') ? 2 : li.classList.contains('task--completed') ? 1 : 0);
+
+  function clearDropMarks() {
+    dropTarget?.classList.remove('drag-over-top', 'drag-over-bottom');
+    dropTarget = null;
+  }
+
+  /** Limpia todo el estado de un arrastre (también si termina fuera de la lista). */
+  function endDrag() {
+    clearDropMarks();
+    draggedTask?.classList.remove('is-dragging');
+    draggedTask = null;
+  }
+
+  /** La lista hace scroll: cerca de sus bordes se desplaza mientras se arrastra. */
+  function autoScrollList(event) {
+    const rect = tasksList.getBoundingClientRect();
+    const EDGE = 28;
+    const STEP = 10;
+    if (event.clientY < rect.top + EDGE) tasksList.scrollTop -= STEP;
+    else if (event.clientY > rect.bottom - EDGE) tasksList.scrollTop += STEP;
+  }
+
+  /**
+   * Guarda el orden. Con un filtro activo solo se ven algunas tareas: se
+   * reordenan entre los huecos que ya ocupaban en el orden completo y las
+   * ocultas no se mueven. Se olvidan los uids que ya no existen, salvo si el
+   * .ics no cargó (entonces faltarían las de Moodle, y no son "borradas").
+   */
+  async function saveTaskOrder() {
+    const visible = [...tasksList.querySelectorAll('.task')].map(li => li.dataset.uid);
+    const shown = new Set(visible);
+    let k = 0;
+    const next = lastFullOrder.map(uid => (shown.has(uid) ? visible[k++] : uid));
+    const inNext = new Set(next);
+    const stale = moodleLoaded ? [] : customTaskOrder.filter(uid => !inNext.has(uid));
+    const order = [...next, ...stale];
+    if (new TextEncoder().encode(ORDER_KEY + JSON.stringify(order)).length > SYNC_ITEM_BYTES) {
+      setTasksStatus('Demasiadas tareas para guardar el orden', true);
+      renderAll(); // vuelve al orden anterior
+      return;
+    }
+    customTaskOrder = order;
+    lastFullOrder = next;
+    try {
+      await chrome.storage.sync.set({ [ORDER_KEY]: order });
+    } catch (error) {
+      setTasksStatus(`No se pudo guardar el orden (${error.message})`, true);
+    }
+  }
+
+  tasksList.addEventListener('dragstart', event => {
+    const li = taskFrom(event);
+    if (!li || li.classList.contains('is-exiting')) {
+      event.preventDefault();
+      return;
+    }
+    draggedTask = li;
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', li.dataset.uid);
+    // Un frame después: así la imagen que se arrastra sale con su aspecto normal
+    // y solo la fila que se queda atrás se atenúa.
+    requestAnimationFrame(() => {
+      if (draggedTask === li) li.classList.add('is-dragging');
+    });
+  });
+
+  tasksList.addEventListener('dragover', event => {
+    if (!draggedTask) return;
+    autoScrollList(event);
+    const target = taskFrom(event);
+    if (!target || target === draggedTask || taskGroup(target) !== taskGroup(draggedTask)) {
+      clearDropMarks(); // sin preventDefault: ahí no se puede soltar
+      return;
+    }
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    const rect = target.getBoundingClientRect();
+    const after = event.clientY > rect.top + rect.height / 2;
+    if (target !== dropTarget || after !== dropAfter) {
+      clearDropMarks();
+      dropTarget = target;
+      dropAfter = after;
+      target.classList.add(after ? 'drag-over-bottom' : 'drag-over-top');
+    }
+  });
+
+  tasksList.addEventListener('dragleave', event => {
+    const li = taskFrom(event);
+    // dragleave también salta al pasar a un hijo de la misma fila: se ignora.
+    if (li && li === dropTarget && !li.contains(event.relatedTarget)) clearDropMarks();
+  });
+
+  tasksList.addEventListener('drop', event => {
+    if (!draggedTask || !dropTarget) return;
+    event.preventDefault();
+    const moving = draggedTask;
+    const target = dropTarget;
+    const after = dropAfter;
+    endDrag(); // quita las marcas y .is-dragging antes de medir para la animación
+    flipReorder(
+      [...tasksList.children],
+      () => tasksList.insertBefore(moving, after ? target.nextSibling : target),
+      250
+    );
+    saveTaskOrder();
+  });
+
+  tasksList.addEventListener('dragend', endDrag);
+
   // Si se marca una tarea en otro ordenador, se refleja aquí sin recargar.
   // (Fuera de la extensión, p. ej. abriendo popup.html a mano, no hay chrome.storage.)
   globalThis.chrome?.storage?.onChanged.addListener((changes, area) => {
@@ -1515,6 +1668,14 @@
       if (!same) {
         completed = next;
         applyCompleted({ animate: true });
+      }
+    }
+    if (changes[ORDER_KEY]) {
+      const next = Array.isArray(changes[ORDER_KEY].newValue) ? changes[ORDER_KEY].newValue : [];
+      // El eco de lo que se acaba de guardar aquí ya está en memoria: no repinta.
+      if (JSON.stringify(next) !== JSON.stringify(customTaskOrder)) {
+        customTaskOrder = next;
+        if (listLoaded) renderAll();
       }
     }
     if (Object.values(CUSTOM_KEYS).some(key => changes[key])) {
