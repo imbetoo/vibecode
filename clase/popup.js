@@ -1106,28 +1106,27 @@
 
   // ---------- Anillo de progreso ----------
 
-  const RING_LENGTH = 88; // ≈ 2·π·14, igual que stroke-dasharray en popup.css
   const progressRing = document.getElementById('progress-ring');
-  const ringFillElement = progressRing.querySelector('.progress-ring__fill');
 
   /**
-   * % de tareas hechas (sin contar las propias que ya pasaron) en el trazo
-   * verde. Cuenta por la casilla, que cambia en el mismo instante en que se
-   * marca o desmarca; la clase .task--completed llega 300 ms después, cuando
-   * la tarea se mueve, y haría que el anillo fuese con retraso al desmarcar.
-   * Solo toca stroke-dashoffset (y el title), y solo si cambian.
+   * % de tareas hechas en el trazo verde: cuenta TODOS los .task pintados (los
+   * pasados, .is-expired, también) y como hecha la que tiene .task--completed
+   * o la casilla marcada. offset = 88 − porcentaje × 88: 88 = vacío, 0 = lleno.
    */
   function updateProgressRing() {
-    const allTasks = [...tasksList.querySelectorAll('.task')];
-    const validTasks = allTasks.filter(task => !task.classList.contains('is-expired'));
-    const completedCount = validTasks.filter(task => task.querySelector('.task__check').checked).length;
-    const percent = validTasks.length ? completedCount / validTasks.length : 0;
-    const offset = String(RING_LENGTH - percent * RING_LENGTH);
-    if (ringFillElement.style.strokeDashoffset !== offset) ringFillElement.style.strokeDashoffset = offset;
-    const title = validTasks.length
-      ? `${completedCount} de ${validTasks.length} hechas (${Math.round(percent * 100)} %)`
-      : 'Sin tareas';
-    if (progressRing.title !== title) progressRing.title = title;
+    const ringFill = document.querySelector('.progress-ring__fill');
+    if (!ringFill) return;
+    const tasks = [...document.querySelectorAll('#tasks-list .task')];
+    if (tasks.length === 0) {
+      ringFill.style.strokeDashoffset = '88';
+      progressRing.title = 'Sin tareas';
+      return;
+    }
+    const completed = tasks.filter(t => t.classList.contains('task--completed') || t.querySelector('.task__check').checked).length;
+    const percent = completed / tasks.length;
+    ringFill.style.strokeDashoffset = String(88 - (percent * 88));
+    // Mismo recuento en el texto que sale al pasar el ratón por el anillo.
+    progressRing.title = `${completed} de ${tasks.length} hechas (${Math.round(percent * 100)} %)`;
   }
 
   /**
